@@ -1,5 +1,4 @@
-from controller import MenuState
-from menu import add_menu_items
+from controller import MenuState, add_menu_items
 
 if __name__ == "__main__":
     try:
