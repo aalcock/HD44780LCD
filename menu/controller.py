@@ -102,7 +102,7 @@ class MenuState(object):
         if not self._lcd.backlight_enabled:
             self._lcd.backlight_enabled = True
 
-        if self.timer is not None:
+        if self.timer:
             try:
                 self.timer.cancel()
             except ValueError:
@@ -244,6 +244,14 @@ class MenuState(object):
     def quit(self):
         """A handler that is called when the program quits."""
         self._lcd.clear()
+        if self.timer:
+            try:
+                self.timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+
         self.dim_backlight()
 
     def bind_buttons(self, up_gpio, prev_gpio, next_gpio, action_gpio):
