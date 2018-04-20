@@ -289,8 +289,6 @@ class MenuState(object):
         elif command in ["*", "x", " "]:
             self.do_action()
         elif command in ["q", "quit"]:
-            while not self.is_empty():
-                self.pop()
             return True
         elif command == "":
             self.display()
