@@ -7,6 +7,7 @@ def add_menu_items(menu_state):
     from datetime import datetime, date
     from os import system, popen
     import socket
+    from platform import node
 
     # Helper methods for the menu
     def today(_):
@@ -29,7 +30,6 @@ def add_menu_items(menu_state):
         system("reboot now")
 
 
-
     def get_ip_address(_):
         # This method assumes a simple network:
         # * IPv4
@@ -46,8 +46,11 @@ def add_menu_items(menu_state):
             s.close()
         return IP
 
+    def get_hostname(_):
+        return node().split(".")[0];
+
     dt = menu_state.link(
-        MenuState.menu_item("System", ""),
+        MenuState.menu_item("Information", get_hostname),
         MenuState.menu_item("IP Address", get_ip_address),
         MenuState.menu_item("Time", time),
         MenuState.menu_item("Date", today))
