@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from gpiozero import Button
+from __future__ import print_function
+from signal import pause
 from atexit import register
 from threading import Timer
-import time
 
 TITLE = 'title'
 DESCRIPTION = 'description'
@@ -12,14 +12,44 @@ ACTION = 'action'
 BACKLIGHT_DELAY = 10.0
 
 
+class FakeLCDInner(object):
+    def __init__(self, rows, cols):
+        self.cols = cols
+        self.rows = rows
+
+class FakeLCD(object):
+    def __init__(self):
+        self.backlight_enabled = True
+        self.lcd = FakeLCDInner(2, 12)
+
+    def create_char(self, a, b):
+        pass
+
+    def home(self):
+        print(chr(27) + '[H')
+
+    def clear(self):
+        print(chr(27) + "[2J" + chr(27) + '[H')
+
+    def write_string(self, s):
+        print(s, end='')
+
+    def crlf(self):
+        print()
+
+
 class MenuState(object):
-    def __init__(self, lcd):
+    def __init__(self, lcd=None):
         """
         Creates a Menu for writing to the LCD defined by lcd
         :param lcd:
         :type lcd: CharLCD
         """
-        self._lcd = lcd
+        if lcd:
+            self._lcd = lcd
+        else:
+            self._lcd = FakeLCD()
+
         self._button_up = None
         self._button_prev = None
         self._button_next = None
@@ -42,7 +72,9 @@ class MenuState(object):
             0b00000,
             0b00000)
         self._lcd.create_char(0, char)
+
         self.touch()
+
         # Make sure the screen is cleared when Python terminates
         register(self.quit)
 
@@ -167,7 +199,20 @@ class MenuState(object):
         else:
             self._lcd.clear()
 
+    ###########################################################################
+    # Methods to handle hardware events:
+    # * Up button
+    # * Action button
+    # * Next button
+    # * Previous button
+    # * Quit/exit program
+
+    def do_up(self):
+        """This method is called when the 'up' button is pressed"""
+        self.pop()
+
     def do_action(self):
+        """This method is called when the 'action' button is pressed"""
         menu_item = self.peek()
         action = menu_item[ACTION]
         if action:
@@ -175,33 +220,50 @@ class MenuState(object):
         self.display()
 
     def do_prev(self):
+        """This method is called when the 'prev' button is pressed"""
         menu_item = self.peek()
         prev = menu_item[PREV]
         if prev:
             self.swap(prev)
 
     def do_next(self):
+        """This method is called when the 'next' button is pressed"""
         menu_item = self.peek()
         nxt = menu_item[NEXT]
         if nxt:
             self.swap(nxt)
 
     def quit(self):
+        """A handler that is called when the program quits."""
         self._lcd.clear()
         self.dim_backlight()
 
     def bind_buttons(self, up_gpio, prev_gpio, next_gpio, action_gpio):
-        self._button_up = Button(up_gpio)
-        self._button_prev = Button(prev_gpio)
-        self._button_next = Button(next_gpio)
-        self._button_action = Button(action_gpio)
+        try:
+            from gpiozero import Button
+            self._button_up = Button(up_gpio)
+            self._button_prev = Button(prev_gpio)
+            self._button_next = Button(next_gpio)
+            self._button_action = Button(action_gpio)
 
-        self._button_up.when_pressed = self.pop
-        self._button_prev.when_pressed = self.do_prev
-        self._button_next.when_pressed = self.do_next
-        self._button_action.when_pressed = self.do_action
+            self._button_up.when_pressed = self.do_up
+            self._button_prev.when_pressed = self.do_prev
+            self._button_next.when_pressed = self.do_next
+            self._button_action.when_pressed = self.do_action
+        except:
+            if self.is_real():
+                print("ERROR initialising button bindings")
+                print("      install the gpiozero package")
+
+    ###########################################################################
+    # Methods that can be used to run the menu without an LCD attached
+
+    def is_real(self):
+        """Returns false if this instance is simulating a real LCD"""
+        return not isinstance(self._lcd, FakeLCD)
 
     def execute_command(self, command):
+        """Process a command from the keyboard"""
         if command in ["^", "u", "6"]:
             self.pop()
         elif command in ["<", "p", ","]:
@@ -217,20 +279,24 @@ class MenuState(object):
         elif command == "":
             self.display()
         else:
-            print "^ 6 : go (U)p the menu tree to the parent menu item\n" \
-                  "> . : (N)ext menu item\n" \
-                  "< , : (P)revious menu item\n" \
-                  "*   : e(X)ecute menu item or drill down into an item" \
-                  "<cr>: update the display" \
-                  "q   : (Q)uit"
+            print("^ 6 : go (U)p the menu tree to the parent menu item\n"
+                  "> . : (N)ext menu item\n"
+                  "< , : (P)revious menu item\n"
+                  "*   : e(X)ecute menu item or drill down into an item"
+                  "<cr>: update the display"
+                  "q   : (Q)uit")
             self.display()
         return False
 
     def run_keyboard(self):
+        """Run using the keyboard for input rather than hardware buttons"""
         while True:
-            command = raw_input("Command: ").lower()
+            command = raw_input("\n\nCommand: ").lower()
             if self.execute_command(command):
                 break
+
+    ###########################################################################
+    # Methods for managing the menu items for display
 
     @staticmethod
     def menu_item(title, description, action=None):
@@ -269,8 +335,12 @@ class MenuState(object):
         else:
             return menu_items[0]
 
+    def run(self):
+        if self.is_real():
+            pause()
+        else:
+            self.run_keyboard()
+
     def __str__(self):
         descent = " > ".join([item[TITLE](self) for item in self._stack])
         return "Menu: {}".format(descent)
-
-
