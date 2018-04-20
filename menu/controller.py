@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-from RPLCD.i2c import CharLCD
 from gpiozero import Button
-from signal import pause
 from atexit import register
 from threading import Timer
 import time
@@ -276,37 +274,3 @@ class MenuState(object):
         return "Menu: {}".format(descent)
 
 
-if __name__ == "__main__":
-    from datetime import datetime
-    from os import system, popen
-
-    def today(_):
-        return str(datetime.today())[0:10]
-
-    def time(_):
-        return str(datetime.today())[11:19]
-
-    def runlevel(_):
-        return popen("/sbin/runlevel").read().strip()
-
-    def shutdown(_):
-        system("sudo shutdown now")
-
-    def reboot(_):
-        system("sudo reboot now")
-
-    menu_state = MenuState(CharLCD('PCF8574', 0x27,
-                                   auto_linebreaks=True, charmap='A00',
-                                   rows=2, cols=16, dotsize=8))
-
-    dt = menu_state.link(MenuState.menu_item("Date/Time", ""),
-                         MenuState.menu_item("Date", today),
-                         MenuState.menu_item("Time", time))
-
-    sys = menu_state.link(MenuState.menu_item("Run level", runlevel),
-                          MenuState.menu_item("System", "Shutdown", action=shutdown),
-                          MenuState.menu_item("Systen", "Reboot", action=reboot))
-
-    menu_state.push(MenuState.link(None, dt, sys))
-    menu_state.bind_buttons(5, 6, 12, 13)
-    pause()
