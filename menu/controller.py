@@ -266,7 +266,7 @@ class MenuState(object):
             self._button_prev.when_pressed = self.do_prev
             self._button_next.when_pressed = self.do_next
             self._button_action.when_pressed = self.do_action
-        except:
+        except ImportError:
             if self.is_real():
                 print("ERROR initialising button bindings")
                 print("      install the gpiozero package")
