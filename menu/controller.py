@@ -23,7 +23,7 @@ class FakeLCD(object):
     """Faking the LCD object in RPLCD library"""
     def __init__(self):
         self.backlight_enabled = True
-        self.lcd = FakeLCDInner(2, 12)
+        self.lcd = FakeLCDInner(2, 16)
 
     def create_char(self, a, b):
         """Doesn't do anything"""
@@ -70,6 +70,7 @@ class MenuState(object):
         self._stack = []
 
         # Create special menu characters
+        # First is an up-menu symbol
         char = (
             0b11100,
             0b11000,
@@ -80,6 +81,33 @@ class MenuState(object):
             0b00000,
             0b00000)
         self._lcd.create_char(0, char)
+
+        # Next is a left/right symbol
+        char = (
+            0b00100,
+            0b01000,
+            0b11111,
+            0b01100,
+            0b00110,
+            0b11111,
+            0b00010,
+            0b00100
+        )
+        self._lcd.create_char(1, char)
+
+        # Next is the CR/action symbol
+        char = (
+            0b00001,
+            0b00001,
+            0b00001,
+            0b00101,
+            0b01001,
+            0b11111,
+            0b01000,
+            0b00100
+        )
+        self._lcd.create_char(2, char)
+
 
         self.touch()
 
@@ -171,37 +199,43 @@ class MenuState(object):
         """
         return len(self._stack) == 0
 
-    def format(self, message, pre=None, post=None):
+    def format(self, message, pre="", post="", just=-1):
         """
         Formats a message for the screen, padding any shortfall with spaces.
         :param message: The main message to display
         :type message: basestring
         :param pre: A possible prefix for the message
         :param post: A possible suffix displayed a the RHS
+        :param just: -1 for left justified, 0 for center and 1 for right
         :return: The formatted string, padded with spaces to the width of the
         screen
         """
-        length = self._lcd.lcd.cols
-        line = pre if pre else ""
-        line += message
-        line = line.ljust(length)[:length]
-        if post:
-            line = line[:-len(post)] + post
-        return line
+        length = self._lcd.lcd.cols - len(pre) - len(post)
+        justified = message[0:length]
+        if just < 0:
+            justified = justified.ljust(length)
+        elif just == 0:
+            justified = justified.center(length)
+        else:
+            justified = justified.rjust(length)
+        return pre + justified + post
 
     def display(self):
         self.touch()
         menu_item = self.peek()
         if menu_item:
-            pre = None if self.is_root_menu() else chr(0)
-            post = "*" if menu_item[ACTION] else None
+            pre = "" if self.is_root_menu() else chr(0)
+            post = ""
+            if menu_item[PREV]:
+                post += chr(1)
+            if menu_item[ACTION]:
+                post += chr(2)
+
             first = self.format(menu_item[TITLE](self), pre, post)
             self._lcd.home()
             self._lcd.write_string(first)
 
-            pre = "<" if menu_item[PREV] else None
-            post = ">" if menu_item[NEXT] else None
-            second = self.format(menu_item[DESCRIPTION](self), pre, post)
+            second = self.format(menu_item[DESCRIPTION](self), just=1)
             self._lcd.crlf()
             self._lcd.write_string(second)
         else:
