@@ -9,7 +9,22 @@ DESCRIPTION = 'description'
 PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
-BACKLIGHT_DELAY = 10.0
+BACKLIGHT_DELAY = 30.0
+
+SYSTEMD_EXEC_FILE = "/usr/local/bin/lcdmenu.py"
+SYSTEMD_CONF_FILENAME = "/etc/systemd/system/lcdmenu.service"
+SYSTEMD_CONF = """[Unit]
+Description=System control menu on a HP44780LCD
+Requires=basic.target
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python """ + SYSTEMD_EXEC_FILE + """
+
+[Install]
+WantedBy=multi-user.target
+Alias=lcdmenu.service"""
 
 
 class FakeLCDInner(object):
@@ -107,7 +122,6 @@ class MenuState(object):
             0b00100
         )
         self._lcd.create_char(2, char)
-
 
         self.touch()
 
@@ -393,6 +407,7 @@ class MenuState(object):
         descent = " > ".join([item[TITLE](self) for item in self._stack])
         return "Menu: {}".format(descent)
 
+
 def add_menu_items(menu_state):
     # Import local to function to keep the namespace tight
     # This code is called once, so there is no performance issues
@@ -454,3 +469,74 @@ def add_menu_items(menu_state):
         MenuState.menu_item("System", "Reboot", action=reboot))
 
     menu_state.push(MenuState.link(None, dt, sys))
+
+
+def install():
+    """Install this into a system. Must be root"""
+
+    # First - do we the correct libraries installed?
+    print("Testing that we have the right libraries...")
+    try:
+        import RPLCD.i2c
+        import gpiozero
+    except ImportError:
+        print("ERROR: Please install the RPLCD and gpiozero Python libraries")
+        return
+
+    print("Copying this file to " + SYSTEMD_EXEC_FILE)
+    try:
+        import shutil
+        shutil.copyfile(__file__, SYSTEMD_EXEC_FILE)
+    except IOError:
+        print("ERROR: Cannot copy the file to " + SYSTEMD_EXEC_FILE + ": Do you have the right permissions?")
+        return
+
+    print("Creating systemctl configuration file at " + SYSTEMD_CONF_FILENAME)
+    try:
+        f = open(SYSTEMD_CONF_FILENAME, "w")
+        f.write(SYSTEMD_CONF)
+        f.close()
+    except IOError:
+        print("ERROR: Cannot copy the file to " + SYSTEMD_CONF_FILENAME + ": Do you have the right permissions?")
+        return
+
+    from os import system
+    print("Reloading systemctl daemon...")
+    system("systemctl daemon-reload")
+
+    print("Enabling lcdmenu to start on boot...")
+    system("systemctl enable lcdmenu")
+
+    print("Starting lcdmenu...")
+    system("systemctl start lcdmenu")
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="System control menu on HD44780 LCD panel")
+    parser.add_argument("install", nargs="?", help="Install as a system service on a Raspberry Pi")
+    parser.add_argument("--service", nargs="?", help="Refuse to run unless the LCD is present")
+
+    args = parser.parse_args()
+
+    if args.install:
+        install()
+    else:
+        try:
+            from RPLCD.i2c import CharLCD
+            lcd = CharLCD('PCF8574', 0x27,
+                          auto_linebreaks=True, charmap='A00',
+                          rows=2, cols=16, dotsize=8,
+                          backlight_enabled=True)
+        except:
+            if args.service:
+                print("ERROR: cannot load RPLCD library")
+                exit(1)
+            else:
+                lcd = None
+
+        menu_state = MenuState(lcd)
+        menu_state.bind_buttons(5, 6, 12, 13)
+        add_menu_items(menu_state)
+        menu_state.run()
+
