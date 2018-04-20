@@ -13,28 +13,36 @@ BACKLIGHT_DELAY = 10.0
 
 
 class FakeLCDInner(object):
+    """Faking the inner LCD object in RPLCD library"""
     def __init__(self, rows, cols):
         self.cols = cols
         self.rows = rows
 
+
 class FakeLCD(object):
+    """Faking the LCD object in RPLCD library"""
     def __init__(self):
         self.backlight_enabled = True
         self.lcd = FakeLCDInner(2, 12)
 
     def create_char(self, a, b):
+        """Doesn't do anything"""
         pass
 
     def home(self):
+        """Moves the cursor to the top left"""
         print(chr(27) + '[H')
 
     def clear(self):
+        """Clears the termninal and moves the cursor to the top left"""
         print(chr(27) + "[2J" + chr(27) + '[H')
 
     def write_string(self, s):
+        """Write characters to the terminal"""
         print(s, end='')
 
     def crlf(self):
+        """Write a CRLF to the terminal"""
         print()
 
 
