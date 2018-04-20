@@ -3,12 +3,15 @@ from RPLCD.i2c import CharLCD
 from gpiozero import Button
 from signal import pause
 from atexit import register
+from threading import Timer
+import time
 
 TITLE = 'title'
 DESCRIPTION = 'description'
 PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
+BACKLIGHT_DELAY = 10.0
 
 
 class MenuState(object):
@@ -18,12 +21,17 @@ class MenuState(object):
         :param lcd:
         :type lcd: CharLCD
         """
-        self._stack = []
         self._lcd = lcd
         self._button_up = None
         self._button_prev = None
         self._button_next = None
         self._button_action = None
+
+        # The scheduler and scheduled event are used to manage the backlight
+        self.timer = None
+
+        # This manages the nested menus
+        self._stack = []
 
         # Create special menu characters
         char = (
@@ -36,8 +44,40 @@ class MenuState(object):
             0b00000,
             0b00000)
         self._lcd.create_char(0, char)
+        self.touch()
         # Make sure the screen is cleared when Python terminates
         register(self.quit)
+
+    def dim_backlight(self):
+        """
+        Turns off the backlight
+        :return:
+        """
+        self._lcd.backlight_enabled = False
+
+    def touch(self):
+        """
+        Update the object indicating the user has interacted with it at this
+        point in time. This is used to manage the backlight
+        :return:
+        """
+        if not self._lcd.backlight_enabled:
+            self._lcd.backlight_enabled = True
+
+        if self.timer is not None:
+            try:
+                self.timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+
+        # Set up a timer that will turn off the backlight after a short delay
+        def dim():
+            self.dim_backlight()
+
+        self.timer = Timer(BACKLIGHT_DELAY, dim)
+        self.timer.start()
 
     def push(self, menu_item):
         """
@@ -112,6 +152,7 @@ class MenuState(object):
         return line
 
     def display(self):
+        self.touch()
         menu_item = self.peek()
         if menu_item:
             pre = None if self.is_root_menu() else chr(0)
@@ -149,6 +190,7 @@ class MenuState(object):
 
     def quit(self):
         self._lcd.clear()
+        self.dim_backlight()
 
     def bind_buttons(self, up_gpio, prev_gpio, next_gpio, action_gpio):
         self._button_up = Button(up_gpio)
