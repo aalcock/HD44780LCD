@@ -27,6 +27,9 @@ WantedBy=multi-user.target
 Alias=lcdmenu.service"""
 
 
+################################################################################
+# Classes for simulating a LCD on the terminal
+
 class FakeLCDInner(object):
     """Faking the inner LCD object in RPLCD library"""
     def __init__(self, rows, cols):
@@ -61,6 +64,8 @@ class FakeLCD(object):
         print()
 
 
+################################################################################
+# Main class for modelling a heirarchical menu
 class MenuState(object):
     def __init__(self, lcd=None):
         """
@@ -460,13 +465,15 @@ def add_menu_items(menu_state):
         MenuState.menu_item("Information", get_hostname),
         MenuState.menu_item("IP Address", get_ip_address),
         MenuState.menu_item("Time", time),
-        MenuState.menu_item("Date", today))
+        MenuState.menu_item("Date", today)
+    )
 
     sys = menu_state.link(
-        MenuState.menu_item("Services", ""),
-        MenuState.menu_item("Run level", runlevel),
+        MenuState.menu_item("System", ""),
         MenuState.menu_item("System", "Shutdown", action=shutdown),
-        MenuState.menu_item("System", "Reboot", action=reboot))
+        MenuState.menu_item("System", "Reboot", action=reboot),
+        MenuState.menu_item("Run level", runlevel)
+    )
 
     menu_state.push(MenuState.link(None, dt, sys))
 
