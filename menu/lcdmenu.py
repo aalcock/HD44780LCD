@@ -582,7 +582,7 @@ def add_menu_items(menu_state):
     )
 
     sys = menu_state.link(
-        MenuState.menu_item("Services", ""),
+        MenuState.menu_item("Services", "start, stop, ..."),
         MenuState.menu_item("lcdmenu", lcdmenu_state)
     )
 
