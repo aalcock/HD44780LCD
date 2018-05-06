@@ -3,6 +3,7 @@ from __future__ import print_function
 from signal import pause
 from atexit import register
 from threading import Timer
+from os import system, popen
 
 TITLE = 'title'
 DESCRIPTION = 'description'
@@ -296,20 +297,20 @@ class MenuState(object):
 
         # Format them
         pre = "" if self.is_root_menu() else self.UP
-            post = ""
-            if menu_item[PREV]:
+        post = ""
+        if menu_item[PREV]:
             post += self.LEFT_RIGHT
-            if menu_item[ACTION]:
+        if menu_item[ACTION]:
             post += self.EXEC
 
         first = self.format(title, pre, post)
         second = self.format(description, just=1)
 
         # Write them to the screen
-            self._lcd.home()
-            self._lcd.write_string(first)
-            self._lcd.crlf()
-            self._lcd.write_string(second)
+        self._lcd.home()
+        self._lcd.write_string(first)
+        self._lcd.crlf()
+        self._lcd.write_string(second)
 
         if not self.is_real():
             # Required to flush the write buffer on Unix
@@ -492,11 +493,26 @@ class MenuState(object):
         return "Menu: {}".format(descent)
 
 
+################################################################################
+# Functions and procedures for displaying and executing concrete menu items
+def probe_system_service(name):
+    """Query for systemctl for service _name_, returning a map of state
+    information. The returned map has the keys:
+    * LoadState
+    * ActiveState
+    * SubState
+    :param name: The name of the service to query
+    :type name: basestring
+    :return: A map"""
+    s = popen("systemctl show -p ActiveState -p SubState -p LoadState " + name).read().strip()
+    ll = [ i.split("=") for i in s.split("\n")]
+    properties = {i[0]:i[1] for i in ll}
+    return properties
+
 def add_menu_items(menu_state):
     # Import local to function to keep the namespace tight
     # This code is called once, so there is no performance issues
     from datetime import datetime, date
-    from os import system, popen
     import socket
     from platform import node
 
@@ -572,16 +588,11 @@ def install():
 
     from os import system
     print("Probing whether lcdmenu already exists...")
-    status = system("systemctl status lcdmenu")
-    if status == 0:
-        print("... exists and is running")
-        print("Stopping service...")
-        system("systemctl stop lcdmenu")
-    elif status == 3:
-        print("... exists and is stopped/disabled")
+    properties = probe_system_service("lcdmenu")
+    if properties["LoadState"] == "loaded":
+        print("... " + properties["ActiveState"] + " " + properties["SubState"])
     else:
-        print("... does not exist")
-
+        print("... " + properties["LoadState"])
 
     print("Copying this file to " + SYSTEMD_EXEC_FILE)
     try:
@@ -607,9 +618,9 @@ def install():
     print("Reloading systemctl daemon...")
     system("systemctl daemon-reload")
 
-    if status != 0:
-    print("Enabling lcdmenu to start on boot...")
-    system("systemctl enable lcdmenu")
+    if properties["LoadState"] != "loaded":
+        print("Enabling lcdmenu to start on boot...")
+        system("systemctl enable lcdmenu")
 
     print("Starting lcdmenu...")
     system("systemctl start lcdmenu")
