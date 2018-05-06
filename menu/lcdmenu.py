@@ -5,6 +5,7 @@ from atexit import register
 from threading import Timer
 from os import system, popen
 
+# Magic constants for the LCD menu itself
 TITLE = 'title'
 DESCRIPTION = 'description'
 PREV = 'prev'
@@ -12,7 +13,11 @@ NEXT = 'next'
 ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
 REDRAW_DELAY = 5.0
+UP = "^"
+LEFT_RIGHT = "="
+EXEC = "*"
 
+# Constants for configuring/installing/managing services
 SERVICE="lcdmenu"
 SYSTEMD_EXEC_FILE = "/usr/local/bin/" + SERVICE + ".py"
 SYSTEMD_CONF_FILENAME = "/etc/systemd/system/" + SERVICE + ".service"
@@ -85,8 +90,66 @@ def get_char():
 
 
 ################################################################################
+# Take control of the LCD and configure it
+
+def initialise(lcd):
+    ###########################################
+    # Set up the LCD device itself
+    # Create special menu characters
+    # First is an up-menu symbol
+    char = (
+        0b11100,
+        0b11000,
+        0b10100,
+        0b00010,
+        0b00001,
+        0b00000,
+        0b00000,
+        0b00000)
+    lcd.create_char(0, char)
+
+    # Next is a left/right symbol
+    char = (
+        0b00100,
+        0b01000,
+        0b11111,
+        0b01100,
+        0b00110,
+        0b11111,
+        0b00010,
+        0b00100
+    )
+    lcd.create_char(1, char)
+
+    # Next is the CR/action symbol
+    char = (
+        0b00001,
+        0b00001,
+        0b00001,
+        0b00101,
+        0b01001,
+        0b11111,
+        0b01000,
+        0b00100
+    )
+    lcd.create_char(2, char)
+    if not isinstance(lcd, FakeLCD):
+        global UP, LEFT_RIGHT, EXEC
+        UP = chr(0)
+        LEFT_RIGHT = chr(1)
+        EXEC = chr(2)
+
+    lcd.clear()
+
+
+################################################################################
 # Main class for modelling a heirarchical menu
 class MenuState(object):
+    # The scheduler and scheduled event are used to manage the backlight
+    # and scrolling/updating text
+    _backlight_timer = None
+    _update_timer = None
+
     def __init__(self, lcd=None):
         """
         Creates a Menu for writing to the LCD defined by lcd
@@ -97,74 +160,42 @@ class MenuState(object):
             self._lcd = lcd
         else:
             self._lcd = FakeLCD()
+            self._lcd.clear()
 
         self._button_up = None
         self._button_prev = None
         self._button_next = None
         self._button_action = None
 
-        # The scheduler and scheduled event are used to manage the backlight
-        # and scrolling/updating text
-        self.update_timer = None
-        self.backlight_timer = None
-
         # This manages the nested menus
         self._stack = []
 
-        ###########################################
-        # Set up the LCD device itself
-        # Create special menu characters
-        # First is an up-menu symbol
-        char = (
-            0b11100,
-            0b11000,
-            0b10100,
-            0b00010,
-            0b00001,
-            0b00000,
-            0b00000,
-            0b00000)
-        self._lcd.create_char(0, char)
-
-        # Next is a left/right symbol
-        char = (
-            0b00100,
-            0b01000,
-            0b11111,
-            0b01100,
-            0b00110,
-            0b11111,
-            0b00010,
-            0b00100
-        )
-        self._lcd.create_char(1, char)
-
-        # Next is the CR/action symbol
-        char = (
-            0b00001,
-            0b00001,
-            0b00001,
-            0b00101,
-            0b01001,
-            0b11111,
-            0b01000,
-            0b00100
-        )
-        self._lcd.create_char(2, char)
-        if self.is_real():
-            self.UP = chr(0)
-            self.LEFT_RIGHT = chr(1)
-            self.EXEC = chr(2)
-        else:
-            self.UP = "^"
-            self.LEFT_RIGHT = "="
-            self.EXEC = "*"
-
-        self._lcd.clear()
         self.touch()
 
         # Make sure the screen is cleared when Python terminates
         register(self.quit)
+
+    @staticmethod
+    def cancel_backlight_timer():
+        if MenuState._backlight_timer:
+            try:
+                MenuState._backlight_timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+            MenuState._backlight_timer = None
+
+    @staticmethod
+    def cancel_update_timer():
+        if MenuState._update_timer:
+            try:
+                MenuState._update_timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+            MenuState._update_timer = None
 
     def dim_backlight(self):
         """
@@ -186,28 +217,13 @@ class MenuState(object):
         def dim():
             self.dim_backlight()
 
-        if self.backlight_timer:
-            try:
-                self.backlight_timer.cancel()
-            except ValueError:
-                # if the event has already run, we will receive this error
-                # It is safe to ignore
-                pass
-
-        self.backlight_timer = Timer(BACKLIGHT_DELAY, dim)
-        self.backlight_timer.start()
+        MenuState.cancel_backlight_timer()
+        MenuState._backlight_timer = Timer(BACKLIGHT_DELAY, dim)
+        MenuState._backlight_timer.start()
 
         # If the update timer is running (it should be), cancel it so
-        # the display is not redrawn1
-
-        if self.update_timer:
-            try:
-                self.update_timer.cancel()
-            except ValueError:
-                # if the event has already run, we will receive this error
-                # It is safe to ignore
-                pass
-            self.update_timer = None
+        # the display is not redrawn
+        MenuState.cancel_update_timer()
 
     def push(self, menu_item):
         """
@@ -301,12 +317,12 @@ class MenuState(object):
         description = menu_item[DESCRIPTION](self)
 
         # Format them
-        pre = "" if self.is_root_menu() else self.UP
+        pre = "" if self.is_root_menu() else UP
         post = ""
         if menu_item[PREV]:
-            post += self.LEFT_RIGHT
+            post += LEFT_RIGHT
         if menu_item[ACTION]:
-            post += self.EXEC
+            post += EXEC
 
         first = self.format(title, pre, post)
         second = self.format(description, just=1)
@@ -331,8 +347,9 @@ class MenuState(object):
                 if not self.is_real():
                     self._lcd.crlf()
 
-            self.update_timer = Timer(REDRAW_DELAY, redraw)
-            self.update_timer.start()
+            MenuState.cancel_update_timer()
+            MenuState._update_timer = Timer(REDRAW_DELAY, redraw)
+            MenuState._update_timer.start()
 
 
     ###########################################################################
@@ -372,23 +389,8 @@ class MenuState(object):
     def quit(self):
         """A handler that is called when the program quits."""
         self._lcd.clear()
-        if self.backlight_timer:
-            try:
-                self.backlight_timer.cancel()
-            except ValueError:
-                # if the event has already run, we will receive this error
-                # It is safe to ignore
-                pass
-            self.backlight_timer = None
-        if self.update_timer:
-            try:
-                self.update_timer.cancel()
-            except ValueError:
-                # if the event has already run, we will receive this error
-                # It is safe to ignore
-                pass
-            self.update_timer = None
-
+        MenuState.cancel_backlight_timer()
+        MenuState.cancel_update_timer()
         self.dim_backlight()
 
     def bind_buttons(self, up_gpio, prev_gpio, next_gpio, action_gpio):
@@ -514,8 +516,8 @@ def probe_system_service(name):
     s = popen("systemctl show " + states + name).read().strip()
     if not s:
         return {}
-    ll = [ i.split("=") for i in s.split("\n")]
-    properties = {i[0]:i[1] for i in ll}
+    ll = [i.split("=") for i in s.split("\n")]
+    properties = {i[0]: i[1] for i in ll}
     return properties
 
 
@@ -610,6 +612,8 @@ def install():
     properties = probe_system_service(SERVICE)
     if properties[LOAD_STATE] == "loaded":
         print("... " + properties[ACTIVE_STATE] + " " + properties[SUB_STATE])
+        print("Stopping service...")
+        system("systemctl stop " + SERVICE)
     else:
         print("... " + properties[LOAD_STATE])
 
@@ -662,6 +666,7 @@ if __name__ == "__main__":
                           auto_linebreaks=True, charmap='A00',
                           rows=2, cols=16, dotsize=8,
                           backlight_enabled=True)
+            initialise(lcd)
         except:
             if args.service:
                 print("ERROR: cannot load RPLCD library")
