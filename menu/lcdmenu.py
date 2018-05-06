@@ -430,8 +430,8 @@ def add_menu_items(menu_state):
         return datetime.now().strftime("%H:%M:%S")
 
 
-    def runlevel(_):
-        return "Runlevel: " + popen("/sbin/runlevel").read().strip()
+    def uptime(_):
+        return popen("uptime").read().strip().split(',')[0].split('up ')[1]
 
 
     def shutdown(_):
@@ -472,7 +472,7 @@ def add_menu_items(menu_state):
         MenuState.menu_item("System", ""),
         MenuState.menu_item("System", "Shutdown", action=shutdown),
         MenuState.menu_item("System", "Reboot", action=reboot),
-        MenuState.menu_item("Run level", runlevel)
+        MenuState.menu_item("Uptime", uptime)
     )
 
     menu_state.push(MenuState.link(None, dt, sys))
