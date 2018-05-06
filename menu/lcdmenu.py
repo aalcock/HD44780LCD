@@ -10,7 +10,7 @@ PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
-REDRAW_DELAY = 0.5
+REDRAW_DELAY = 5.0
 
 SYSTEMD_EXEC_FILE = "/usr/local/bin/lcdmenu.py"
 SYSTEMD_CONF_FILENAME = "/etc/systemd/system/lcdmenu.service"
