@@ -64,6 +64,19 @@ class FakeLCD(object):
         print("\x0d\x0a", end='')
 
 
+def get_char():
+    """Read a single character from the terminal. This is compatible only
+    with Unix, not Windows"""
+    import sys, tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
 
 ################################################################################
 # Main class for modelling a heirarchical menu
@@ -370,7 +383,7 @@ class MenuState(object):
     def run_keyboard(self):
         """Run using the keyboard for input rather than hardware buttons"""
         while True:
-            command = raw_input("\n\nCommand: ").lower()
+            command = get_char().lower()
             if self.execute_command(command):
                 break
 
