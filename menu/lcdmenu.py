@@ -570,6 +570,17 @@ def install():
         print("ERROR: Please install the RPLCD and gpiozero Python libraries")
         return
 
+    from os import system
+    print("Probing whether lcdmenu already exists")
+    status = system("systemctl status lcdmenu")
+    if status == 0:
+        print("... exists and is running")
+    elif status == 3:
+        print("... exists and is stopped/disabled")
+    else:
+        print("... does not exist")
+
+
     print("Copying this file to " + SYSTEMD_EXEC_FILE)
     try:
         import shutil
@@ -591,10 +602,10 @@ def install():
               ": Do you have the right permissions?")
         return
 
-    from os import system
     print("Reloading systemctl daemon...")
     system("systemctl daemon-reload")
 
+    if status != 0:
     print("Enabling lcdmenu to start on boot...")
     system("systemctl enable lcdmenu")
 
