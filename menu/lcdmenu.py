@@ -571,10 +571,12 @@ def install():
         return
 
     from os import system
-    print("Probing whether lcdmenu already exists")
+    print("Probing whether lcdmenu already exists...")
     status = system("systemctl status lcdmenu")
     if status == 0:
         print("... exists and is running")
+        print("Stopping service...")
+        system("systemctl stop lcdmenu")
     elif status == 3:
         print("... exists and is stopped/disabled")
     else:
