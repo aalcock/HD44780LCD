@@ -443,7 +443,8 @@ def add_menu_items(menu_state):
 
 
     def uptime(_):
-        return "Uptime: " + popen("uptime").read().strip().split(',')[0].split('up ')[1]
+        return "Uptime: " + \
+               popen("uptime").read().strip().split(',')[0].split('up ')[1]
 
 
     def shutdown(_):
@@ -463,12 +464,12 @@ def add_menu_items(menu_state):
         try:
             # doesn't even have to be reachable
             s.connect(('10.255.255.255', 1))
-            IP = s.getsockname()[0]
+            ip = s.getsockname()[0]
         except:
-            IP = '127.0.0.1'
+            ip = '127.0.0.1'
         finally:
             s.close()
-        return IP
+        return ip
 
     def get_hostname(_):
         return node().split(".")[0]
@@ -507,7 +508,9 @@ def install():
         import shutil
         shutil.copyfile(__file__, SYSTEMD_EXEC_FILE)
     except IOError:
-        print("ERROR: Cannot copy the file to " + SYSTEMD_EXEC_FILE + ": Do you have the right permissions?")
+        print("ERROR: Cannot copy the file to " +
+              SYSTEMD_EXEC_FILE +
+              ": Do you have the right permissions?")
         return
 
     print("Creating systemctl configuration file at " + SYSTEMD_CONF_FILENAME)
@@ -516,7 +519,9 @@ def install():
         f.write(SYSTEMD_CONF)
         f.close()
     except IOError:
-        print("ERROR: Cannot copy the file to " + SYSTEMD_CONF_FILENAME + ": Do you have the right permissions?")
+        print("ERROR: Cannot copy the file to " +
+              SYSTEMD_CONF_FILENAME +
+              ": Do you have the right permissions?")
         return
 
     from os import system
