@@ -608,7 +608,7 @@ def install():
     from os import system
     print("Probing whether " + SERVICE + " already exists...")
     properties = probe_system_service(SERVICE)
-    if properties[LOAD_STATE"] == "loaded":
+    if properties[LOAD_STATE] == "loaded":
         print("... " + properties[ACTIVE_STATE] + " " + properties[SUB_STATE])
     else:
         print("... " + properties[LOAD_STATE])
