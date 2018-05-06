@@ -49,11 +49,11 @@ class FakeLCD(object):
 
     def home(self):
         """Moves the cursor to the top left"""
-        print(chr(27) + '[H')
+        print("\x1b\x5b\x48", end='')
 
     def clear(self):
         """Clears the termninal and moves the cursor to the top left"""
-        print(chr(27) + "[2J" + chr(27) + '[H')
+        print("\x1b\x5b\x48\x1b\x5b\x32\x4a", end='')
 
     def write_string(self, s):
         """Write characters to the terminal"""
@@ -61,7 +61,8 @@ class FakeLCD(object):
 
     def crlf(self):
         """Write a CRLF to the terminal"""
-        print()
+        print("\x0d\x0a", end='')
+
 
 
 ################################################################################
@@ -127,7 +128,16 @@ class MenuState(object):
             0b00100
         )
         self._lcd.create_char(2, char)
+        if self.is_real():
+            self.UP = chr(0)
+            self.LEFT_RIGHT = chr(1)
+            self.EXEC = chr(2)
+        else:
+            self.UP = "^"
+            self.LEFT_RIGHT = "="
+            self.EXEC = "*"
 
+        self._lcd.clear()
         self.touch()
 
         # Make sure the screen is cleared when Python terminates
@@ -244,11 +254,12 @@ class MenuState(object):
         menu_item = self.peek()
         if menu_item:
             pre = "" if self.is_root_menu() else chr(0)
+        pre = "" if self.is_root_menu() else self.UP
             post = ""
             if menu_item[PREV]:
-                post += chr(1)
+            post += self.LEFT_RIGHT
             if menu_item[ACTION]:
-                post += chr(2)
+            post += self.EXEC
 
             first = self.format(menu_item[TITLE](self), pre, post)
             self._lcd.home()
@@ -346,12 +357,13 @@ class MenuState(object):
         elif command == "":
             self.display()
         else:
-            print("^ 6 : go (U)p the menu tree to the parent menu item\n"
+            print("\n\n\n\n"
+                  "^ 6 : go (U)p the menu tree to the parent menu item\n"
                   "> . : (N)ext menu item\n"
                   "< , : (P)revious menu item\n"
-                  "*   : e(X)ecute menu item or drill down into an item"
-                  "<cr>: update the display"
-                  "q   : (Q)uit")
+                  "*   : e(X)ecute menu item or drill down into an item\n"
+                  "<cr>: update the display\n"
+                  "q   : (Q)uit\n")
             self.display()
         return False
 
