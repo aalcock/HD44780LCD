@@ -459,7 +459,7 @@ def add_menu_items(menu_state):
         return IP
 
     def get_hostname(_):
-        return node().split(".")[0];
+        return node().split(".")[0]
 
     dt = menu_state.link(
         MenuState.menu_item("Information", get_hostname),
