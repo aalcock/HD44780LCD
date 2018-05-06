@@ -431,7 +431,7 @@ def add_menu_items(menu_state):
 
 
     def uptime(_):
-        return popen("uptime").read().strip().split(',')[0].split('up ')[1]
+        return "Uptime: " + popen("uptime").read().strip().split(',')[0].split('up ')[1]
 
 
     def shutdown(_):
@@ -464,15 +464,15 @@ def add_menu_items(menu_state):
     dt = menu_state.link(
         MenuState.menu_item("Information", get_hostname),
         MenuState.menu_item("IP Address", get_ip_address),
+        MenuState.menu_item("Uptime", uptime),
         MenuState.menu_item("Time", time),
         MenuState.menu_item("Date", today)
     )
 
     sys = menu_state.link(
-        MenuState.menu_item("System", ""),
-        MenuState.menu_item("System", "Shutdown", action=shutdown),
-        MenuState.menu_item("System", "Reboot", action=reboot),
-        MenuState.menu_item("Uptime", uptime)
+        MenuState.menu_item("Reboot", ""),
+        MenuState.menu_item("Reboot", "Are you sure?", action=reboot),
+        MenuState.menu_item("Shutdown", "Are you sure?", action=shutdown)
     )
 
     menu_state.push(MenuState.link(None, dt, sys))
