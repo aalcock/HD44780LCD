@@ -10,6 +10,7 @@ PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
+REDRAW_DELAY = 0.5
 
 SYSTEMD_EXEC_FILE = "/usr/local/bin/lcdmenu.py"
 SYSTEMD_CONF_FILENAME = "/etc/systemd/system/lcdmenu.service"
@@ -25,7 +26,6 @@ ExecStart=/usr/bin/python """ + SYSTEMD_EXEC_FILE + """
 [Install]
 WantedBy=multi-user.target
 Alias=lcdmenu.service"""
-
 
 ################################################################################
 # Classes for simulating a LCD on the terminal
@@ -98,11 +98,15 @@ class MenuState(object):
         self._button_action = None
 
         # The scheduler and scheduled event are used to manage the backlight
-        self.timer = None
+        # and scrolling/updating text
+        self.update_timer = None
+        self.backlight_timer = None
 
         # This manages the nested menus
         self._stack = []
 
+        ###########################################
+        # Set up the LCD device itself
         # Create special menu characters
         # First is an up-menu symbol
         char = (
@@ -172,20 +176,32 @@ class MenuState(object):
         if not self._lcd.backlight_enabled:
             self._lcd.backlight_enabled = True
 
-        if self.timer:
+        # Set up a timer that will turn off the backlight after a short delay
+        def dim():
+            self.dim_backlight()
+
+        if self.backlight_timer:
             try:
-                self.timer.cancel()
+                self.backlight_timer.cancel()
             except ValueError:
                 # if the event has already run, we will receive this error
                 # It is safe to ignore
                 pass
 
-        # Set up a timer that will turn off the backlight after a short delay
-        def dim():
-            self.dim_backlight()
+        self.backlight_timer = Timer(BACKLIGHT_DELAY, dim)
+        self.backlight_timer.start()
 
-        self.timer = Timer(BACKLIGHT_DELAY, dim)
-        self.timer.start()
+        # If the update timer is running (it should be), cancel it so
+        # the display is not redrawn1
+
+        if self.update_timer:
+            try:
+                self.update_timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+            self.update_timer = None
 
     def push(self, menu_item):
         """
@@ -263,10 +279,22 @@ class MenuState(object):
         return pre + justified + post
 
     def display(self):
+        """Set the display to display the correct menu item (or nothing)"""
         self.touch()
         menu_item = self.peek()
         if menu_item:
-            pre = "" if self.is_root_menu() else chr(0)
+            self.draw_text(menu_item)
+        else:
+            self._lcd.clear()
+
+    def draw_text(self, menu_item):
+        """Obtain the text for the menu item and draw it on the display,
+        setting up a timer to redraw the item in a periodic fashion"""
+
+        title = menu_item[TITLE](self)
+        description = menu_item[DESCRIPTION](self)
+
+        # Format them
         pre = "" if self.is_root_menu() else self.UP
             post = ""
             if menu_item[PREV]:
@@ -274,15 +302,32 @@ class MenuState(object):
             if menu_item[ACTION]:
             post += self.EXEC
 
-            first = self.format(menu_item[TITLE](self), pre, post)
+        first = self.format(title, pre, post)
+        second = self.format(description, just=1)
+
+        # Write them to the screen
             self._lcd.home()
             self._lcd.write_string(first)
-
-            second = self.format(menu_item[DESCRIPTION](self), just=1)
             self._lcd.crlf()
             self._lcd.write_string(second)
-        else:
-            self._lcd.clear()
+
+        if not self.is_real():
+            # Required to flush the write buffer on Unix
+            self._lcd.crlf()
+            self._lcd.write_string("Command? ")
+
+        # Set up a timer that will redraw the menu item in a short time
+        # But only do this if the backlight is on (i.e. the display is
+        # visible)
+        if self._lcd.backlight_enabled:
+            def redraw():
+                self.draw_text(menu_item)
+                if not self.is_real():
+                    self._lcd.crlf()
+
+            self.update_timer = Timer(REDRAW_DELAY, redraw)
+            self.update_timer.start()
+
 
     ###########################################################################
     # Methods to handle hardware events:
@@ -321,13 +366,22 @@ class MenuState(object):
     def quit(self):
         """A handler that is called when the program quits."""
         self._lcd.clear()
-        if self.timer:
+        if self.backlight_timer:
             try:
-                self.timer.cancel()
+                self.backlight_timer.cancel()
             except ValueError:
                 # if the event has already run, we will receive this error
                 # It is safe to ignore
                 pass
+            self.backlight_timer = None
+        if self.update_timer:
+            try:
+                self.update_timer.cancel()
+            except ValueError:
+                # if the event has already run, we will receive this error
+                # It is safe to ignore
+                pass
+            self.update_timer = None
 
         self.dim_backlight()
 
@@ -350,7 +404,6 @@ class MenuState(object):
 
     ###########################################################################
     # Methods that can be used to run the menu without an LCD attached
-
     def is_real(self):
         """Returns false if this instance is simulating a real LCD"""
         return not isinstance(self._lcd, FakeLCD)
@@ -366,6 +419,7 @@ class MenuState(object):
         elif command in ["*", "x", " "]:
             self.do_action()
         elif command in ["q", "quit"]:
+            self.quit()
             return True
         elif command == "":
             self.display()
