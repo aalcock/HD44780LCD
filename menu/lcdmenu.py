@@ -13,8 +13,9 @@ ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
 REDRAW_DELAY = 5.0
 
-SYSTEMD_EXEC_FILE = "/usr/local/bin/lcdmenu.py"
-SYSTEMD_CONF_FILENAME = "/etc/systemd/system/lcdmenu.service"
+SERVICE="lcdmenu"
+SYSTEMD_EXEC_FILE = "/usr/local/bin/" + SERVICE + ".py"
+SYSTEMD_CONF_FILENAME = "/etc/systemd/system/" + SERVICE + ".service"
 SYSTEMD_CONF = """[Unit]
 Description=System control menu on a HP44780LCD
 Requires=basic.target
@@ -26,7 +27,11 @@ ExecStart=/usr/bin/python """ + SYSTEMD_EXEC_FILE + """
 
 [Install]
 WantedBy=multi-user.target
-Alias=lcdmenu.service"""
+Alias=""" + SERVICE + """".service"""
+
+LOAD_STATE = "LoadState"
+ACTIVE_STATE = "ActiveState"
+SUB_STATE = "SubState"
 
 ################################################################################
 # Classes for simulating a LCD on the terminal
@@ -504,10 +509,15 @@ def probe_system_service(name):
     :param name: The name of the service to query
     :type name: basestring
     :return: A map"""
-    s = popen("systemctl show -p ActiveState -p SubState -p LoadState " + name).read().strip()
+    all_states = [LOAD_STATE, ACTIVE_STATE, SUB_STATE]
+    states = "".join(["-p " + p + " " for p in all_states])
+    s = popen("systemctl show " + states + name).read().strip()
+    if not s:
+        return {}
     ll = [ i.split("=") for i in s.split("\n")]
     properties = {i[0]:i[1] for i in ll}
     return properties
+
 
 def add_menu_items(menu_state):
     # Import local to function to keep the namespace tight
@@ -536,6 +546,10 @@ def add_menu_items(menu_state):
 
     def reboot(_):
         system("reboot now")
+
+    def lcdmenu_state(_):
+        properties = probe_system_service(SERVICE)
+        return properties[ACTIVE_STATE] + ", " + properties[SUB_STATE]
 
 
     def get_ip_address(_):
@@ -566,12 +580,17 @@ def add_menu_items(menu_state):
     )
 
     sys = menu_state.link(
+        MenuState.menu_item("Services", ""),
+        MenuState.menu_item("lcdmenu", lcdmenu_state)
+    )
+
+    reboot = menu_state.link(
         MenuState.menu_item("Reboot", ""),
         MenuState.menu_item("Reboot", "Are you sure?", action=reboot),
         MenuState.menu_item("Shutdown", "Are you sure?", action=shutdown)
     )
 
-    menu_state.push(MenuState.link(None, dt, sys))
+    menu_state.push(MenuState.link(None, dt, sys, reboot))
 
 
 def install():
@@ -587,12 +606,12 @@ def install():
         return
 
     from os import system
-    print("Probing whether lcdmenu already exists...")
-    properties = probe_system_service("lcdmenu")
-    if properties["LoadState"] == "loaded":
-        print("... " + properties["ActiveState"] + " " + properties["SubState"])
+    print("Probing whether " + SERVICE + " already exists...")
+    properties = probe_system_service(SERVICE)
+    if properties[LOAD_STATE"] == "loaded":
+        print("... " + properties[ACTIVE_STATE] + " " + properties[SUB_STATE])
     else:
-        print("... " + properties["LoadState"])
+        print("... " + properties[LOAD_STATE])
 
     print("Copying this file to " + SYSTEMD_EXEC_FILE)
     try:
@@ -618,12 +637,12 @@ def install():
     print("Reloading systemctl daemon...")
     system("systemctl daemon-reload")
 
-    if properties["LoadState"] != "loaded":
-        print("Enabling lcdmenu to start on boot...")
-        system("systemctl enable lcdmenu")
+    if properties[LOAD_STATE] != "loaded":
+        print("Enabling " + SERVICE + " to start on boot...")
+        system("systemctl enable " + SERVICE)
 
-    print("Starting lcdmenu...")
-    system("systemctl start lcdmenu")
+    print("Starting " + SERVICE + "...")
+    system("systemctl start " + SERVICE)
 
 
 if __name__ == "__main__":
