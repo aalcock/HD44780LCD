@@ -133,7 +133,7 @@ class MenuState(object):
         self._lcd.create_char(0, char)
 
         # Next is a left/right symbol
-        self._char = (
+            char = (
             0b00100,
             0b01000,
             0b11111,
@@ -146,7 +146,7 @@ class MenuState(object):
         self._lcd.create_char(1, char)
 
         # Next is the CR/action symbol
-        self._char = (
+            char = (
             0b00001,
             0b00001,
             0b00001,
