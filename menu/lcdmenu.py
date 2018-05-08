@@ -12,7 +12,7 @@ PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
-REDRAW_DELAY = 5.0
+REDRAW_DELAY = 2.0
 
 # Constants for configuring/installing/managing services
 SERVICE = "lcdmenu"
@@ -120,56 +120,72 @@ class MenuState(object):
         ###########################################
         # Set up the LCD device itself
         # Create special menu characters
-        # First is an up-menu symbol
-        char = (
-            0b11100,
-            0b11000,
-            0b10100,
-            0b00010,
-            0b00001,
-            0b00000,
-            0b00000,
-            0b00000)
-        self._lcd.create_char(0, char)
-
-        # Next is a left/right symbol
-            char = (
-            0b00100,
-            0b01000,
-            0b11111,
-            0b01100,
-            0b00110,
-            0b11111,
-            0b00010,
-            0b00100
-        )
-        self._lcd.create_char(1, char)
-
-        # Next is the CR/action symbol
-            char = (
-            0b00001,
-            0b00001,
-            0b00001,
-            0b00101,
-            0b01001,
-            0b11111,
-            0b01000,
-            0b00100
-        )
-        self._lcd.create_char(2, char)
-
         if self.is_real():
+            # First is an up-menu symbol
+            char = (
+                0b11100,
+                0b11000,
+                0b10100,
+                0b00010,
+                0b00001,
+                0b00000,
+                0b00000,
+                0b00000)
+            self._lcd.create_char(0, char)
             self.UP = chr(0)
+
+            # Next is a left/right symbol
+            char = (
+                0b00100,
+                0b01000,
+                0b11111,
+                0b01100,
+                0b00110,
+                0b11111,
+                0b00010,
+                0b00100
+            )
+            self._lcd.create_char(1, char)
             self.LEFT_RIGHT = chr(1)
+
+            # Next is the CR/action symbol
+            char = (
+                0b00001,
+                0b00001,
+                0b00001,
+                0b00101,
+                0b01001,
+                0b11111,
+                0b01000,
+                0b00100
+            )
+            self._lcd.create_char(2, char)
             self.EXEC = chr(2)
+
+            # Next is symbol separating start/end on a text wrap
+            char = (
+                0b00100,
+                0b00100,
+                0b00100,
+                0b00100,
+                0b00100,
+                0b00100,
+                0b00100,
+                0b00100
+            )
+            self._lcd.create_char(3, char)
+            self.SEPARATOR = chr(3)
         else:
             self.UP = "^"
             self.LEFT_RIGHT = "="
             self.EXEC = "*"
+            self.SEPARATOR = "|"
+        ########################################
 
         # Make sure the screen is cleared when Python terminates
         register(self.quit)
 
+        self._counter = 0
         self.touch()
 
     def cancel_backlight_timer(self):
@@ -207,6 +223,7 @@ class MenuState(object):
         point in time. This is used to manage the backlight
         :return:
         """
+        self._counter = 0
         if not self._lcd.backlight_enabled:
             # Turn on the backlight on the HD44780 board
             self._lcd.backlight_enabled = True
@@ -290,7 +307,11 @@ class MenuState(object):
         screen
         """
         length = self._lcd.lcd.cols - len(pre) - len(post)
-        justified = message[0:length]
+        if len(message) > length:
+            start = self._counter % (length + 1)
+            justified = (message + self.SEPARATOR + message)[start:start + length]
+        else:
+            justified = message
         if just < 0:
             justified = justified.ljust(length)
         elif just == 0:
@@ -349,6 +370,9 @@ class MenuState(object):
             self.cancel_update_timer()
             self._update_timer = Timer(REDRAW_DELAY, redraw)
             self._update_timer.start()
+
+        # Increment the display counter for scrolling text
+        self._counter += 1
 
 
     ###########################################################################
@@ -529,7 +553,8 @@ def add_menu_items(menu_state):
 
     # Helper methods for the menu
     def time(_):
-        return datetime.now().strftime("%H:%M:%S")
+        """Return the current date and time"""
+        return datetime.now().strftime("%y-%m-%d %H:%M:%S")
 
 
     def uptime(_):
@@ -556,7 +581,9 @@ def add_menu_items(menu_state):
                     value = "{:0.3g}".format(f)
             out.append(value)
 
-        return " ".join(out)
+        # Ensure the output is at least 14 characters to ensure stability during
+        # potential text rotation
+        return " ".join(out).ljust(14)
 
 
     def shutdown(_):
