@@ -523,22 +523,40 @@ def probe_system_service(name):
 def add_menu_items(menu_state):
     # Import local to function to keep the namespace tight
     # This code is called once, so there is no performance issues
-    from datetime import datetime, date
+    from datetime import datetime
     import socket
     from platform import node
 
     # Helper methods for the menu
-    def today(_):
-        return str(date.today())
-
-
     def time(_):
         return datetime.now().strftime("%H:%M:%S")
 
 
     def uptime(_):
+        """Return the time component of the uptime command"""
         return "Uptime: " + \
                popen("uptime").read().strip().split(',')[0].split('up ')[1]
+
+
+    def load_average(_):
+        """Return the load average component of the uptime command"""
+        values = popen("uptime").read().strip().split(' ')[-3:]
+
+        out = []
+        for value in values:
+            if len(value) > 4:
+                # This value is too big to display well
+                f = float(value)
+                if f > 100.0:
+                    # Unfortunately this load avg is inherently too big
+                    # Just display the integer
+                    value = "{:.0f}".format(f)
+                else:
+                    # Round to 3 sig fig to display in 4 digits or less
+                    value = "{:0.3g}".format(f)
+            out.append(value)
+
+        return " ".join(out)
 
 
     def shutdown(_):
@@ -577,8 +595,8 @@ def add_menu_items(menu_state):
         MenuState.menu_item("Information", get_hostname),
         MenuState.menu_item("IP Address", get_ip_address),
         MenuState.menu_item("Uptime", uptime),
-        MenuState.menu_item("Time", time),
-        MenuState.menu_item("Date", today)
+        MenuState.menu_item("Load average", load_average),
+        MenuState.menu_item("Date/Time", time)
     )
 
     sys = menu_state.link(
