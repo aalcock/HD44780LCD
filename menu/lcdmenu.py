@@ -52,10 +52,6 @@ class FakeLCD(object):
         self.backlight_enabled = True
         self.lcd = FakeLCDInner(2, 16)
 
-    def create_char(self, a, b):
-        """Doesn't do anything"""
-        pass
-
     def home(self):
         """Moves the cursor to the top left"""
         print("\x1b\x5b\x48", end='')
@@ -90,32 +86,21 @@ def get_char():
 
 
 ################################################################################
-# Main class for modelling a hierarchical menu
-class MenuState(object):
-    # The scheduler and scheduled event are used to manage the backlight
-    # and scrolling/updating text
-
+# LCD Buffer - a buffer for managing updates to the LCD screen and backlight
+class LCDBuffer(object):
     def __init__(self, lcd=None):
-        """
-        Creates a Menu for writing to the LCD defined by lcd
-        :param lcd:
-        :type lcd: CharLCD
-        """
         if lcd:
             self._lcd = lcd
         else:
             self._lcd = FakeLCD()
-        self._lcd.clear()
+        self.rows = self._lcd.lcd.rows
+        self.cols = self._lcd.lcd.cols
 
-        self._backlight_timer = None
-        self._update_timer = None
-        self._button_up = None
-        self._button_prev = None
-        self._button_next = None
-        self._button_action = None
+        self._buffer = ["".ljust(self.cols)] * self.rows
+        self._written = list(self._buffer)
 
-        # This manages the nested menus
-        self._stack = []
+        self.clear()
+        self.backlight_on()
 
         ###########################################
         # Set up the LCD device itself
@@ -182,6 +167,82 @@ class MenuState(object):
             self.SEPARATOR = "|"
         ########################################
 
+    def is_real(self):
+        """Returns false if this instance is simulating a real LCD"""
+        return not isinstance(self._lcd, FakeLCD)
+
+    def is_backlight_on(self):
+        """Returns whether the backlight is enabled or not"""
+        return self._lcd.backlight_enabled
+
+    def backlight_on(self):
+        """Turns the backlight to the LCD on"""
+        if not self._lcd.backlight_enabled:
+            self._lcd.backlight_enabled = True
+
+    def backlight_off(self):
+        """Turns the backlight to the LCD off"""
+        if self._lcd.backlight_enabled:
+            self._lcd.backlight_enabled = False
+
+    def clear(self):
+        self._lcd.clear()
+
+    def set_line(self, line, text):
+        """
+        Sets the text for a line on the LCD screen
+        :param line: The line number
+        :type line: int
+        :param text: The text for the line can be longer than the display
+        :type text: string
+        """
+        self._buffer[line] = text
+
+    def flush(self):
+        if self._buffer == self._written:
+            # No changes, so don't write to the screen
+            return
+
+        # Write them to the screen
+        self._lcd.home()
+        self._lcd.write_string(self._buffer[0])
+        self._lcd.crlf()
+        self._lcd.write_string(self._buffer[1])
+        self._written = list(self._buffer)
+
+        if not self.is_real():
+            # Required to flush the write buffer on Unix
+            self._lcd.crlf()
+            self._lcd.write_string("Command? ")
+
+
+################################################################################
+# Main class for modelling a hierarchical menu
+class MenuState(object):
+    # The scheduler and scheduled event are used to manage the backlight
+    # and scrolling/updating text
+
+    def __init__(self, lcd=None):
+        """
+        Creates a Menu for writing to the LCD defined by lcd
+        :param lcd:
+        :type lcd: CharLCD
+        """
+        self.lcd = LCDBuffer(lcd)
+
+        # Timer callbacks for the LCD
+        self._backlight_timer = None
+        self._update_timer = None
+
+        # Binding actions to the physical buttons
+        self._button_up = None
+        self._button_prev = None
+        self._button_next = None
+        self._button_action = None
+
+        # This manages the nested menus
+        self._stack = []
+
         # Make sure the screen is cleared when Python terminates
         register(self.quit)
 
@@ -210,13 +271,6 @@ class MenuState(object):
                 pass
             self._update_timer = None
 
-    def dim_backlight(self):
-        """
-        Turns off the backlight
-        :return:
-        """
-        self._lcd.backlight_enabled = False
-
     def touch(self):
         """
         Update the object indicating the user has interacted with it at this
@@ -224,22 +278,17 @@ class MenuState(object):
         :return:
         """
         self._counter = 0
-        if not self._lcd.backlight_enabled:
-            # Turn on the backlight on the HD44780 board
-            self._lcd.backlight_enabled = True
+        self.lcd.backlight_on()
 
         # Set up a timer that will turn off the backlight after a short delay
         def dim():
             self._backlight_timer = None
-            self.dim_backlight()
+            self.cancel_update_timer()
+            self.lcd.backlight_off()
 
         self.cancel_backlight_timer()
         self._backlight_timer = Timer(BACKLIGHT_DELAY, dim)
         self._backlight_timer.start()
-
-        # If the update timer is running (it should be), cancel it so
-        # the display is not redrawn
-        self.cancel_update_timer()
 
     def push(self, menu_item):
         """
@@ -306,10 +355,10 @@ class MenuState(object):
         :return: The formatted string, padded with spaces to the width of the
         screen
         """
-        length = self._lcd.lcd.cols - len(pre) - len(post)
+        length = self.lcd.cols - len(pre) - len(post)
         if len(message) > length:
             start = self._counter % (length + 1)
-            justified = (message + self.SEPARATOR + message)[start:start + length]
+            justified = (message + self.lcd.SEPARATOR + message)[start:start + length]
         else:
             justified = message
         if just < 0:
@@ -327,7 +376,8 @@ class MenuState(object):
         if menu_item:
             self.draw_text(menu_item)
         else:
-            self._lcd.clear()
+            self.cancel_update_timer()
+            self.lcd.clear()
 
     def draw_text(self, menu_item):
         """Obtain the text for the menu item and draw it on the display,
@@ -337,43 +387,27 @@ class MenuState(object):
         description = menu_item[DESCRIPTION](self)
 
         # Format them
-        pre = "" if self.is_root_menu() else self.UP
+        pre = "" if self.is_root_menu() else self.lcd.UP
         post = ""
         if menu_item[PREV]:
-            post += self.LEFT_RIGHT
+            post += self.lcd.LEFT_RIGHT
         if menu_item[ACTION]:
-            post += self.EXEC
+            post += self.lcd.EXEC
 
-        first = self.format(title, pre, post)
-        second = self.format(description, just=1)
-
-        # Write them to the screen
-        self._lcd.home()
-        self._lcd.write_string(first)
-        self._lcd.crlf()
-        self._lcd.write_string(second)
-
-        if not self.is_real():
-            # Required to flush the write buffer on Unix
-            self._lcd.crlf()
-            self._lcd.write_string("Command? ")
+        self.lcd.set_line(0, self.format(title, pre, post))
+        self.lcd.set_line(1, self.format(description, just=1))
+        self.lcd.flush()
 
         # Set up a timer that will redraw the menu item in a short time
         # But only do this if the backlight is on (i.e. the display is
         # visible)
-        if self._lcd.backlight_enabled:
+        if self.lcd.is_backlight_on():
             def redraw():
                 self.draw_text(menu_item)
-                if not self.is_real():
-                    self._lcd.crlf()
 
             self.cancel_update_timer()
             self._update_timer = Timer(REDRAW_DELAY, redraw)
             self._update_timer.start()
-
-        # Increment the display counter for scrolling text
-        self._counter += 1
-
 
     ###########################################################################
     # Methods to handle hardware events:
@@ -382,7 +416,6 @@ class MenuState(object):
     # * Next button
     # * Previous button
     # * Quit/exit program
-
     def do_up(self):
         """This method is called when the 'up' button is pressed"""
         self.pop()
@@ -411,10 +444,10 @@ class MenuState(object):
 
     def quit(self):
         """A handler that is called when the program quits."""
-        self._lcd.clear()
         self.cancel_backlight_timer()
         self.cancel_update_timer()
-        self.dim_backlight()
+        self.lcd.backlight_off()
+        self.lcd.clear()
 
     def bind_buttons(self, up_gpio, prev_gpio, next_gpio, action_gpio):
         try:
@@ -429,16 +462,12 @@ class MenuState(object):
             self._button_next.when_pressed = self.do_next
             self._button_action.when_pressed = self.do_action
         except ImportError:
-            if self.is_real():
+            if self.lcd.is_real():
                 print("ERROR initialising button bindings")
                 print("      install the gpiozero package")
 
     ###########################################################################
     # Methods that can be used to run the menu without an LCD attached
-    def is_real(self):
-        """Returns false if this instance is simulating a real LCD"""
-        return not isinstance(self._lcd, FakeLCD)
-
     def execute_command(self, command):
         """Process a command from the keyboard"""
         if command in ["^", "u", "6"]:
@@ -513,7 +542,7 @@ class MenuState(object):
             return menu_items[0]
 
     def run(self):
-        if self.is_real():
+        if self.lcd.is_real():
             pause()
         else:
             self.run_keyboard()
