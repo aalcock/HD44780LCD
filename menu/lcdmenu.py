@@ -38,19 +38,11 @@ SUB_STATE = "SubState"
 
 ################################################################################
 # Classes for simulating a LCD on the terminal
-class FakeLCDInner(object):
-    """Faking the inner LCD object in RPLCD library"""
-    def __init__(self, rows, cols):
-        self.cols = cols
-        self.rows = rows
-
-
 # noinspection PyMethodMayBeStatic
 class FakeLCD(object):
     """Faking the LCD object in RPLCD library"""
     def __init__(self):
         self.backlight_enabled = True
-        self.lcd = FakeLCDInner(2, 16)
 
     def home(self):
         """Moves the cursor to the top left"""
@@ -91,10 +83,12 @@ class LCDBuffer(object):
     def __init__(self, lcd=None):
         if lcd:
             self._lcd = lcd
+            self.rows = self._lcd.lcd.rows
+            self.cols = self._lcd.lcd.cols
         else:
             self._lcd = FakeLCD()
-        self.rows = self._lcd.lcd.rows
-        self.cols = self._lcd.lcd.cols
+            self.rows = 2
+            self.cols = 16
 
         self._buffer = ["".ljust(self.cols)] * self.rows
         self._written = list(self._buffer)
