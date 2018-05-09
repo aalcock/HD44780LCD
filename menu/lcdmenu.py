@@ -54,11 +54,11 @@ class FakeLCD(object):
 
     def home(self):
         """Moves the cursor to the top left"""
-        print("\x1b\x5b\x48", end='')
+        system("tput home")
 
     def clear(self):
         """Clears the terminal and moves the cursor to the top left"""
-        print("\x1b\x5b\x48\x1b\x5b\x32\x4a", end='')
+        system("tput clear")
 
     def write_string(self, s):
         """Write characters to the terminal"""
