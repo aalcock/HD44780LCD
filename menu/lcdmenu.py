@@ -294,6 +294,8 @@ class MenuState(object):
         self._backlight_timer = Timer(BACKLIGHT_DELAY, dim)
         self._backlight_timer.start()
 
+    ###########################################################################
+    # Add/remove/query the items on the menu
     def push(self, menu_item):
         """
         Pushes a new submenu to the display
@@ -348,6 +350,8 @@ class MenuState(object):
         """
         return len(self._stack) == 0
 
+    ###########################################################################
+    # Methods associated with the update of the LCD screen
     def display(self):
         """Set the display to display the correct menu item (or nothing)"""
         self._touch()
