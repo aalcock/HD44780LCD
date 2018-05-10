@@ -348,6 +348,51 @@ class MenuState(object):
         """
         return len(self._stack) == 0
 
+    def display(self):
+        """Set the display to display the correct menu item (or nothing)"""
+        self._touch()
+        menu_item = self.peek()
+        if menu_item:
+            # Set the timer to draw the screen as soon as reasonably possible
+            self._set_update_time(menu_item, 0.05)
+        else:
+            self._cancel_update_timer()
+            self.lcd.clear()
+
+    def _set_update_time(self, menu_item, delay):
+        """
+        Set up a timer that will redraw the menu item in a short time
+        But only do this if the backlight is on (i.e. the display is visible)
+        :param menu_item: The menu item to draw
+        """
+        if self.lcd.is_backlight_on():
+            def redraw():
+                self._draw_text(menu_item)
+
+            self._cancel_update_timer()
+            self._update_timer = Timer(delay, redraw)
+            self._update_timer.start()
+
+    def _draw_text(self, menu_item):
+        """Obtain the text for the menu item and draw it on the display,
+        setting up a timer to redraw the item in a periodic fashion"""
+
+        title = menu_item[TITLE](self)
+        description = menu_item[DESCRIPTION](self)
+
+        # Format them
+        pre = "" if self.is_root_menu() else self.lcd.UP
+        post = ""
+        if menu_item[PREV]:
+            post += self.lcd.LEFT_RIGHT
+        if menu_item[ACTION]:
+            post += self.lcd.EXEC
+
+        self.lcd.set_line(0, self._format(title, pre, post))
+        self.lcd.set_line(1, self._format(description, just=1))
+        self.lcd.flush()
+        self._set_update_time(menu_item, REDRAW_DELAY)
+
     def _format(self, message, pre="", post="", just=-1):
         """
         Formats a message for the screen, padding any shortfall with spaces.
@@ -372,51 +417,6 @@ class MenuState(object):
         else:
             justified = justified.rjust(length)
         return pre + justified + post
-
-    def display(self):
-        """Set the display to display the correct menu item (or nothing)"""
-        self._touch()
-        menu_item = self.peek()
-        if menu_item:
-            # Set the timer to draw the screen as soon as reasonably possible
-            self._set_update_time(menu_item, 0.05)
-        else:
-            self._cancel_update_timer()
-            self.lcd.clear()
-
-    def _draw_text(self, menu_item):
-        """Obtain the text for the menu item and draw it on the display,
-        setting up a timer to redraw the item in a periodic fashion"""
-
-        title = menu_item[TITLE](self)
-        description = menu_item[DESCRIPTION](self)
-
-        # Format them
-        pre = "" if self.is_root_menu() else self.lcd.UP
-        post = ""
-        if menu_item[PREV]:
-            post += self.lcd.LEFT_RIGHT
-        if menu_item[ACTION]:
-            post += self.lcd.EXEC
-
-        self.lcd.set_line(0, self._format(title, pre, post))
-        self.lcd.set_line(1, self._format(description, just=1))
-        self.lcd.flush()
-        self._set_update_time(menu_item, REDRAW_DELAY)
-
-    def _set_update_time(self, menu_item, delay):
-        """
-        Set up a timer that will redraw the menu item in a short time
-        But only do this if the backlight is on (i.e. the display is visible)
-        :param menu_item: The menu item to draw
-        """
-        if self.lcd.is_backlight_on():
-            def redraw():
-                self._draw_text(menu_item)
-
-            self._cancel_update_timer()
-            self._update_timer = Timer(delay, redraw)
-            self._update_timer.start()
 
     ###########################################################################
     # Methods to handle hardware events:
