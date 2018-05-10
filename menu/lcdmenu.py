@@ -387,7 +387,7 @@ class MenuState(object):
         # Format them
         pre = "" if self.is_root_menu() else self.lcd.UP
         post = ""
-        if menu_item[PREV]:
+        if menu_item[PREV] and menu_item[PREV] != menu_item[NEXT]:
             post += self.lcd.LEFT_RIGHT
         if menu_item[ACTION]:
             post += self.lcd.EXEC
