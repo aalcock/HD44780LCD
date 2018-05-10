@@ -12,7 +12,7 @@ PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
 BACKLIGHT_DELAY = 30.0
-REDRAW_DELAY = 2.0
+REDRAW_DELAY = 0.25
 
 # Constants for configuring/installing/managing services
 SERVICE = "lcdmenu"
@@ -43,10 +43,12 @@ class FakeLCD(object):
     """Faking the LCD object in RPLCD library"""
     def __init__(self):
         self.backlight_enabled = True
+        self._cursor_pos = (0, 0)
 
-    def home(self):
-        """Moves the cursor to the top left"""
-        system("tput home")
+    def _set_cursor_pos(self, (row, col)):
+        system("tput cup " + str(row) + " " + str(col))
+
+    cursor_pos = property(fset=_set_cursor_pos)
 
     def clear(self):
         """Clears the terminal and moves the cursor to the top left"""
@@ -177,21 +179,44 @@ class LCDBuffer(object):
         """
         self._buffer[line] = text
 
-    def flush(self):
-        if self._buffer == self._written:
-            # No changes, so don't write to the screen
-            return
+    def _diff(self, a, b):
+        if a == b:
+            return None
 
-        # Write them to the screen
-        self._lcd.home()
-        self._lcd.write_string(self._buffer[0])
-        self._lcd.crlf()
-        self._lcd.write_string(self._buffer[1])
-        self._written = list(self._buffer)
+        l = len(a)
+
+        # Normalise b
+        if not b:
+            b = ""
+        if len(b) < l:
+            b = b.ljust(len(b) - l)
+
+        diffs = []
+        last_diff = None
+        for i in range(l+1):
+            if i == l:
+                # We have just passed the last character of the string
+                if last_diff:
+                    diffs.append((last_diff, l - last_diff + 1))
+            if a[i] == b[i]:
+                if i >= 0:
+                    diffs.append( (last_diff, i-last_diff) )
+                last_diff = None
+            elif not last_diff:
+                last_diff = i
+
+        # Now condense the diffs - set a min gap of 4 characters to make it worthwhile
+
+    def flush(self):
+        """Flush all changes to the buffer to the LCD"""
+        for i in range(len(self._buffer)):
+            if self._buffer[i] != self._written[i]:
+                self._lcd.cursor_pos = (i, 0)
+                self._lcd.write_string(self._buffer[i])
+                self._written[i] = self._buffer[i]
 
         if not self.is_real():
-            # Required to flush the write buffer on Unix
-            self._lcd.crlf()
+            self._lcd.cursor_pos = (3, 0)
             self._lcd.write_string("Command? ")
 
 
@@ -226,9 +251,9 @@ class MenuState(object):
         register(self.quit)
 
         self._counter = 0
-        self.touch()
+        self._touch()
 
-    def cancel_backlight_timer(self):
+    def _cancel_backlight_timer(self):
         """Cancel and clear any backlight timer"""
         if self._backlight_timer:
             try:
@@ -239,7 +264,7 @@ class MenuState(object):
                 pass
             self._backlight_timer = None
 
-    def cancel_update_timer(self):
+    def _cancel_update_timer(self):
         """Cancel and clear any update time"""
         if self._update_timer:
             try:
@@ -250,7 +275,7 @@ class MenuState(object):
                 pass
             self._update_timer = None
 
-    def touch(self):
+    def _touch(self):
         """
         Update the object indicating the user has interacted with it at this
         point in time. This is used to manage the backlight
@@ -262,10 +287,10 @@ class MenuState(object):
         # Set up a timer that will turn off the backlight after a short delay
         def dim():
             self._backlight_timer = None
-            self.cancel_update_timer()
+            self._cancel_update_timer()
             self.lcd.backlight_off()
 
-        self.cancel_backlight_timer()
+        self._cancel_backlight_timer()
         self._backlight_timer = Timer(BACKLIGHT_DELAY, dim)
         self._backlight_timer.start()
 
@@ -323,7 +348,7 @@ class MenuState(object):
         """
         return len(self._stack) == 0
 
-    def format(self, message, pre="", post="", just=-1):
+    def _format(self, message, pre="", post="", just=-1):
         """
         Formats a message for the screen, padding any shortfall with spaces.
         :param message: The main message to display
@@ -350,15 +375,15 @@ class MenuState(object):
 
     def display(self):
         """Set the display to display the correct menu item (or nothing)"""
-        self.touch()
+        self._touch()
         menu_item = self.peek()
         if menu_item:
-            self.draw_text(menu_item)
+            self._set_update_time(menu_item)
         else:
-            self.cancel_update_timer()
+            self._cancel_update_timer()
             self.lcd.clear()
 
-    def draw_text(self, menu_item):
+    def _draw_text(self, menu_item):
         """Obtain the text for the menu item and draw it on the display,
         setting up a timer to redraw the item in a periodic fashion"""
 
@@ -373,18 +398,21 @@ class MenuState(object):
         if menu_item[ACTION]:
             post += self.lcd.EXEC
 
-        self.lcd.set_line(0, self.format(title, pre, post))
-        self.lcd.set_line(1, self.format(description, just=1))
+        self.lcd.set_line(0, self._format(title, pre, post))
+        self.lcd.set_line(1, self._format(description, just=1))
         self.lcd.flush()
 
-        # Set up a timer that will redraw the menu item in a short time
-        # But only do this if the backlight is on (i.e. the display is
-        # visible)
+    def _set_update_time(self, menu_item):
+        """
+        Set up a timer that will redraw the menu item in a short time
+        But only do this if the backlight is on (i.e. the display is visible)
+        :param menu_item: The menu item to draw
+        """
         if self.lcd.is_backlight_on():
             def redraw():
-                self.draw_text(menu_item)
+                self._draw_text(menu_item)
 
-            self.cancel_update_timer()
+            self._cancel_update_timer()
             self._update_timer = Timer(REDRAW_DELAY, redraw)
             self._update_timer.start()
 
@@ -423,8 +451,8 @@ class MenuState(object):
 
     def quit(self):
         """A handler that is called when the program quits."""
-        self.cancel_backlight_timer()
-        self.cancel_update_timer()
+        self._cancel_backlight_timer()
+        self._cancel_update_timer()
         self.lcd.backlight_off()
         self.lcd.clear()
 
@@ -562,7 +590,7 @@ def add_menu_items(menu_state):
     # Helper methods for the menu
     def time(_):
         """Return the current date and time"""
-        return datetime.now().strftime("%y-%m-%d %H:%M:%S")
+        return datetime.now().strftime("%y-%m-%d%H:%M:%S")
 
 
     def uptime(_):
@@ -579,14 +607,14 @@ def add_menu_items(menu_state):
         for value in values:
             if len(value) > 4:
                 # This value is too big to display well
-                f = float(value)
-                if f > 100.0:
-                    # Unfortunately this load avg is inherently too big
-                    # Just display the integer
-                    value = "{:.0f}".format(f)
-                else:
-                    # Round to 3 sig fig to display in 4 digits or less
-                    value = "{:0.3g}".format(f)
+                    f = float(value)
+                    if f > 100.0:
+                        # Unfortunately this load avg is inherently too big
+                        # Just display the integer
+                        value = "{:.0f}".format(f)
+                    else:
+                        # Round to 3 sig fig to display in 4 digits or less
+                        value = "{:0.3g}".format(f)
             out.append(value)
 
         # Ensure the output is at least 14 characters to ensure stability during
