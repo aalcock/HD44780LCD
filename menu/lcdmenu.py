@@ -607,6 +607,7 @@ def add_menu_items(menu_state):
         for value in values:
             if len(value) > 4:
                 # This value is too big to display well
+                try:
                     f = float(value)
                     if f > 100.0:
                         # Unfortunately this load avg is inherently too big
@@ -615,6 +616,8 @@ def add_menu_items(menu_state):
                     else:
                         # Round to 3 sig fig to display in 4 digits or less
                         value = "{:0.3g}".format(f)
+                except ValueError:
+                    pass
             out.append(value)
 
         # Ensure the output is at least 14 characters to ensure stability during
