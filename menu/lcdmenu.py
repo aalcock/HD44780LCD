@@ -378,7 +378,8 @@ class MenuState(object):
         self._touch()
         menu_item = self.peek()
         if menu_item:
-            self._set_update_time(menu_item)
+            # Set the timer to draw the screen as soon as reasonably possible
+            self._set_update_time(menu_item, 0.05)
         else:
             self._cancel_update_timer()
             self.lcd.clear()
@@ -401,8 +402,9 @@ class MenuState(object):
         self.lcd.set_line(0, self._format(title, pre, post))
         self.lcd.set_line(1, self._format(description, just=1))
         self.lcd.flush()
+        self._set_update_time(menu_item, REDRAW_DELAY)
 
-    def _set_update_time(self, menu_item):
+    def _set_update_time(self, menu_item, delay):
         """
         Set up a timer that will redraw the menu item in a short time
         But only do this if the backlight is on (i.e. the display is visible)
@@ -413,7 +415,7 @@ class MenuState(object):
                 self._draw_text(menu_item)
 
             self._cancel_update_timer()
-            self._update_timer = Timer(REDRAW_DELAY, redraw)
+            self._update_timer = Timer(delay, redraw)
             self._update_timer.start()
 
     ###########################################################################
