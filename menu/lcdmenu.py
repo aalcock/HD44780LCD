@@ -140,25 +140,10 @@ class LCDBuffer(object):
             )
             self._lcd.create_char(2, char)
             self.EXEC = chr(2)
-
-            # Next is symbol separating start/end on a text wrap
-            char = (
-                0b00100,
-                0b00100,
-                0b00100,
-                0b00100,
-                0b00100,
-                0b00100,
-                0b00100,
-                0b00100
-            )
-            self._lcd.create_char(3, char)
-            self.SEPARATOR = chr(3)
         else:
             self.UP = "^"
             self.LEFT_RIGHT = "="
             self.EXEC = "*"
-            self.SEPARATOR = "|"
         ########################################
 
     def is_real(self):
@@ -352,7 +337,7 @@ class MenuState(object):
         length = self.lcd.cols - len(pre) - len(post)
         if len(message) > length:
             start = self._counter % (length + 1)
-            justified = (message + self.lcd.SEPARATOR + message)[start:start + length]
+            justified = (message + "|" + message)[start:start + length]
         else:
             justified = message
         if just < 0:
