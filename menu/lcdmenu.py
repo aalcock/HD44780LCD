@@ -56,7 +56,7 @@ class FakeLCD(object):
 
     def write_string(self, s):
         """Write characters to the terminal"""
-        print(s, end='')
+        print(s, end='\x0d\x0a')
 
     def crlf(self):
         """Write a CRLF to the terminal"""
