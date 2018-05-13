@@ -4,8 +4,10 @@ from signal import pause
 from atexit import register
 from threading import Timer
 from os import system, popen
+from uuid import uuid4
 
 # Magic constants for the LCD menu itself
+ID = 'id'
 TITLE = 'title'
 DESCRIPTION = 'description'
 PREV = 'prev'
@@ -412,7 +414,9 @@ class MenuState(object):
         # Format them
         pre = "" if self.is_root_menu() else self.lcd.UP
         post = ""
-        if menu_item[PREV] and menu_item[PREV] != menu_item[NEXT]:
+        if menu_item[PREV] and \
+                menu_item[NEXT] and \
+                menu_item[PREV][ID] != menu_item[NEXT][ID]:
             post += self.lcd.LEFT_RIGHT
         if menu_item[ACTION]:
             post += self.lcd.EXEC
@@ -586,7 +590,8 @@ def create_menu_item(title, description, action=None):
     description_resolved = description if callable(description) \
         else lambda _: str(description)
 
-    return {TITLE: title_resolved,
+    return {ID: uuid4(),
+            TITLE: title_resolved,
             DESCRIPTION: description_resolved,
             ACTION: action,
             PREV: None,
