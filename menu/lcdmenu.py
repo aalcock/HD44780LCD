@@ -197,24 +197,48 @@ class LCDBuffer(object):
         for i in range(l):
             if a[i] == b[i]:
                 if last_diff is not None:
-                    diffs.append( (last_diff, i-last_diff) )
+                    diffs.append((last_diff, i))
                     last_diff = None
-            elif i == 0 or last_diff is not None:
+            elif i == 0 or last_diff is None:
+                # Capture the index of the first difference between the two
+                # strings, with special care at the beginning of a string
                 last_diff = i
         else:
-            if last_diff:
-                diffs.append((last_diff, l - last_diff))
+            if last_diff is not None:
+                diffs.append((last_diff, l - 1))
 
-        # Now condense the diffs - set a min gap of 4 characters to make it worthwhile
+        # Now condense differences that are close together
+        condensed = []
+        prev = None
+        for diff in diffs:
+            if prev:
+                a, b = prev
+                c, d = diff
+                if b + 3 > c:
+                    # these two differences are so close it is more efficient
+                    # to update them together
+                    prev = a, d
+                else:
+                    condensed.append(prev)
+                    prev = diff
+            else:
+                # First time round the loop, just capture the first diff
+                prev = diff
+        else:
+            if prev:
+                condensed.append(prev)
 
+        return condensed
 
     def flush(self):
         """Flush all changes to the buffer to the LCD"""
         for i in range(len(self._buffer)):
             if self._buffer[i] != self._written[i]:
-                self._lcd.cursor_pos = (i, 0)
-                self._lcd.write_string(self._buffer[i])
-                self._written[i] = self._buffer[i]
+                diffs = self._diff(self._buffer[i], self._written[i])
+                for start, end in diffs:
+                    self._lcd.cursor_pos = (i, start)
+                    self._lcd.write_string(self._buffer[i][start:end])
+                    self._written[i] = self._buffer[i]
 
         if not self.is_real():
             self._lcd.cursor_pos = (3, 0)
