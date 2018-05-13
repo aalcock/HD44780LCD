@@ -197,7 +197,7 @@ class LCDBuffer(object):
         for i in range(l):
             if a[i] == b[i]:
                 if last_diff is not None:
-                    diffs.append((last_diff, i))
+                    diffs.append((last_diff, i + 1))
                     last_diff = None
             elif i == 0 or last_diff is None:
                 # Capture the index of the first difference between the two
@@ -205,7 +205,7 @@ class LCDBuffer(object):
                 last_diff = i
         else:
             if last_diff is not None:
-                diffs.append((last_diff, l - 1))
+                diffs.append((last_diff, l))
 
         # Now condense differences that are close together
         condensed = []
@@ -214,7 +214,7 @@ class LCDBuffer(object):
             if prev:
                 a, b = prev
                 c, d = diff
-                if b + 3 > c:
+                if b + 2 > c:
                     # these two differences are so close it is more efficient
                     # to update them together
                     prev = a, d
