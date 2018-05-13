@@ -95,12 +95,12 @@ class LCDBuffer(object):
         self._buffer = ["".ljust(self.cols)] * self.rows
         self._written = list(self._buffer)
 
-        self.clear()
-        self.backlight_on()
-
         ###########################################
         # Set up the LCD device itself
         # Create special menu characters
+        self.clear()
+        self.backlight_on()
+
         if self.is_real():
             # First is an up-menu symbol
             char = (
