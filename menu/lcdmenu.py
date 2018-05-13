@@ -633,7 +633,7 @@ def add_menu_items(menu_state):
     # Helper methods for the menu
     def time(_):
         """Return the current date and time"""
-        return datetime.now().strftime("%y-%m-%d%H:%M:%S")
+        return datetime.now().strftime("%-d %b  %H:%M:%S")
 
 
     def uptime(_):
