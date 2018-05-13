@@ -298,7 +298,7 @@ class MenuState(object):
     # Add/remove/query the items on the menu
     def push(self, menu_item):
         """
-        Pushes a new submenu to the display
+        Pushes a new create_submenu to the display
         :param menu_item:
         :type menu_item: dict
         :return:
@@ -514,46 +514,6 @@ class MenuState(object):
             if self.execute_command(command):
                 break
 
-    ###########################################################################
-    # Methods for managing the menu items for display
-
-    @staticmethod
-    def menu_item(title, description, action=None):
-        """Create a menu item data structure, returning it. Both title and
-        description may be strings (or things that can be turned into strings),
-        or a function that returns a string
-        :param title: The title of the menu item
-        :param description: The description of the menu item
-        :param action: A function with a single argument of the MenuState, which
-        may perform arbitrary work"""
-
-        title_resolved = title if callable(title) else lambda _: str(title)
-        description_resolved = description if callable(description) \
-            else lambda _: str(description)
-
-        return {TITLE: title_resolved,
-                DESCRIPTION: description_resolved,
-                ACTION: action,
-                PREV: None,
-                NEXT: None}
-
-    @staticmethod
-    def link(parent, *menu_items):
-        def link(a, b):
-            a[NEXT] = b
-            b[PREV] = a
-
-        prev = menu_items[-1]
-        for menu_item in menu_items:
-            link(prev, menu_item)
-            prev = menu_item
-
-        if parent:
-            parent[ACTION] = lambda state: state.push(menu_items[0])
-            return parent
-        else:
-            return menu_items[0]
-
     def run(self):
         if self.lcd.is_real():
             pause()
@@ -584,6 +544,53 @@ def probe_system_service(name):
     ll = [i.split("=") for i in s.split("\n")]
     properties = {i[0]: i[1] for i in ll}
     return properties
+
+
+###########################################################################
+# Methods for creating and managing menu item structures
+def create_menu_item(title, description, action=None):
+    """Create a menu item data structure, returning it. Both title and
+    description may be strings (or things that can be turned into strings),
+    or a function that returns a string
+    :param title: The title of the menu item
+    :param description: The description of the menu item
+    :param action: A function with a single argument of the MenuState, which
+    may perform arbitrary work"""
+
+    title_resolved = title if callable(title) else lambda _: str(title)
+    description_resolved = description if callable(description) \
+        else lambda _: str(description)
+
+    return {TITLE: title_resolved,
+            DESCRIPTION: description_resolved,
+            ACTION: action,
+            PREV: None,
+            NEXT: None}
+
+
+def create_submenu(parent, *menu_items):
+    """Link menu items together, optionally under a parent menu item.
+    :param parent: A menu item that, when invoked, opens a sub menu
+    :type parent: dict (a menu item)
+    :param menu_items: An unbounded number of menu item data structures
+    that comprise the create_submenu
+    :type menu_items: dict
+    :return: the parent menu item (if present), else the first item in the
+    sub-menu"""
+    def link(a, b):
+        a[NEXT] = b
+        b[PREV] = a
+
+    prev = menu_items[-1]
+    for menu_item in menu_items:
+        link(prev, menu_item)
+        prev = menu_item
+
+    if parent:
+        parent[ACTION] = lambda state: state.push(menu_items[0])
+        return parent
+    else:
+        return menu_items[0]
 
 
 def add_menu_items(menu_state):
@@ -663,26 +670,27 @@ def add_menu_items(menu_state):
     def get_hostname(_):
         return node().split(".")[0]
 
-    dt = menu_state.link(
-        MenuState.menu_item("Information", get_hostname),
-        MenuState.menu_item("IP Address", get_ip_address),
-        MenuState.menu_item("Uptime", uptime),
-        MenuState.menu_item("Load average", load_average),
-        MenuState.menu_item("Date/Time", time)
+    dt = create_submenu(
+        create_menu_item("Information", get_hostname),
+        create_menu_item("IP Address", get_ip_address),
+        create_menu_item("Uptime", uptime),
+        create_menu_item("Load average", load_average),
+        create_menu_item("Date/Time", time)
     )
 
-    sys = menu_state.link(
-        MenuState.menu_item("Services", "start, stop, ..."),
-        MenuState.menu_item("lcdmenu", lcdmenu_state)
+    sys = create_submenu(
+        create_menu_item("Services", "start, stop, ..."),
+        create_menu_item("lcdmenu", lcdmenu_state)
     )
 
-    reboot = menu_state.link(
-        MenuState.menu_item("Reboot", ""),
-        MenuState.menu_item("Reboot", "Are you sure?", action=reboot),
-        MenuState.menu_item("Shutdown", "Are you sure?", action=shutdown)
+    reboot = create_submenu(
+        create_menu_item("Reboot", ""),
+        create_menu_item("Reboot", "Are you sure?", action=reboot),
+        create_menu_item("Shutdown", "Are you sure?", action=shutdown)
     )
 
-    menu_state.push(MenuState.link(None, dt, sys, reboot))
+    root = create_submenu(None, dt, sys, reboot)
+    menu_state.push(root)
 
 
 def install():
