@@ -27,7 +27,7 @@ Conflicts=shutdown.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python """ + SYSTEMD_EXEC_FILE + """
+ExecStart=/usr/bin/python """ + SYSTEMD_EXEC_FILE + """ lcd
 
 [Install]
 WantedBy=multi-user.target
@@ -633,7 +633,7 @@ def add_menu_items(menu_state):
     # Helper methods for the menu
     def time(_):
         """Return the current date and time"""
-        return datetime.now().strftime("%-d %b  %H:%M:%S")
+        return datetime.now().strftime("%-d %b, %H:%M:%S")
 
 
     def uptime(_):
@@ -790,12 +790,17 @@ def run():
                       rows=2, cols=16, dotsize=8,
                       backlight_enabled=True)
     except ImportError:
-        if args.service:
-            print("ERROR: cannot load RPLCD library")
-            exit(1)
+        print("ERROR: cannot load RPLCD library")
+        exit(1)
 
     menu_state = MenuState(lcd)
     menu_state.bind_buttons(5, 6, 12, 13)
+    add_menu_items(menu_state)
+    menu_state.run()
+
+
+def simulate():
+    menu_state = MenuState()
     add_menu_items(menu_state)
     menu_state.run()
 
@@ -805,16 +810,25 @@ def create_arg_parser():
     from argparse import ArgumentParser
     parser = ArgumentParser(
         description="System control menu on HD44780 LCD panel")
-    parser.add_argument("install", nargs="?",
-                        help="Install as a system service on a Raspberry Pi")
-    parser.add_argument("--service", nargs="?",
-                        help="Refuse to run unless the LCD is present")
+    parser.add_argument("mode",
+                        nargs="?",
+                        choices=["simulate", "lcd", "install"],
+                        default="simulate",
+                        help="Choose how to execute this script, either to "
+                             "<simulate> an lcd on the terminal, running on a "
+                             "physical <lcd> or install the script as a service"
+                        )
     return parser
 
 
 if __name__ == "__main__":
     args = create_arg_parser().parse_args()
-    if args.install:
+    if args.mode == "lcd":
+        run()
+    elif args.mode == "simulate":
+        simulate()
+    elif args.mode == "install":
         install()
     else:
-        run()
+        print("Unknown choice {0}".format(args.mode))
+        exit(1)
