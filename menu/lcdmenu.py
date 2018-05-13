@@ -179,7 +179,8 @@ class LCDBuffer(object):
         """
         self._buffer[line] = text
 
-    def _diff(self, a, b):
+    @staticmethod
+    def _diff(a, b):
         if a == b:
             return None
 
@@ -189,23 +190,23 @@ class LCDBuffer(object):
         if not b:
             b = ""
         if len(b) < l:
-            b = b.ljust(len(b) - l)
+            b = b.ljust(len(b) - l + 1)
 
         diffs = []
         last_diff = None
-        for i in range(l+1):
-            if i == l:
-                # We have just passed the last character of the string
-                if last_diff:
-                    diffs.append((last_diff, l - last_diff + 1))
+        for i in range(l):
             if a[i] == b[i]:
-                if i >= 0:
+                if last_diff is not None:
                     diffs.append( (last_diff, i-last_diff) )
-                last_diff = None
-            elif not last_diff:
+                    last_diff = None
+            elif i == 0 or last_diff is not None:
                 last_diff = i
+        else:
+            if last_diff:
+                diffs.append((last_diff, l - last_diff))
 
         # Now condense the diffs - set a min gap of 4 characters to make it worthwhile
+
 
     def flush(self):
         """Flush all changes to the buffer to the LCD"""
