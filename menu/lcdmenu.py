@@ -240,7 +240,7 @@ class LCDBuffer(object):
                 for start, end in diffs:
                     self._lcd.cursor_pos = (i, start)
                     self._lcd.write_string(self._buffer[i][start:end])
-                    self._written[i] = self._buffer[i]
+                self._written[i] = self._buffer[i]
 
         if not self.is_real():
             self._lcd.cursor_pos = (3, 0)
@@ -677,8 +677,10 @@ def add_menu_items(menu_state):
 
     def lcdmenu_state(_):
         properties = probe_system_service(SERVICE)
-        return properties[ACTIVE_STATE] + ", " + properties[SUB_STATE]
-
+        try:
+            return properties[ACTIVE_STATE] + ", " + properties[SUB_STATE]
+        except KeyError:
+            return "Unknown state"
 
     def get_ip_address(_):
         # This method assumes a simple network:
