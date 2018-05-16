@@ -13,6 +13,7 @@ DESCRIPTION = 'description'
 PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
+JIFFY = 0.01  # A very short period of time
 BACKLIGHT_DELAY = 30.0
 REDRAW_DELAY = 0.25
 
@@ -385,7 +386,7 @@ class MenuState(object):
         menu_item = self.peek()
         if menu_item:
             # Set the timer to draw the screen as soon as reasonably possible
-            self._set_update_time(menu_item, 0.05)
+            self._set_update_time(menu_item, JIFFY)
         else:
             self._cancel_update_timer()
             self.lcd.clear()
