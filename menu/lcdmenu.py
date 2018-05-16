@@ -247,6 +247,16 @@ class LCDBuffer(object):
             self._lcd.cursor_pos = (3, 0)
             self._lcd.write_string("Command? ")
 
+    def flash(self, message):
+        """
+        Write a simple message to the screen, replacing all previous content
+        :param message: The message
+        :type message: basestring
+        """
+        self.clear()
+        self.set_line(0, message)
+        self.flush()
+
 
 ################################################################################
 # Main class for modelling a hierarchical menu
@@ -669,12 +679,16 @@ def add_menu_items(menu_state):
         return " ".join(out).ljust(14)
 
 
-    def shutdown(_):
-        system("shutdown now")
+    def shutdown(menu_item):
+        system("nohup shutdown now &")
+        menu_item.quit()
+        menu_item.lcd.flash("Shutting down...")
 
 
-    def reboot(_):
-        system("reboot now")
+    def reboot(menu_item):
+        system("nohup reboot now &")
+        menu_item.quit()
+        menu_item.lcd.flash("Rebooting...")
 
     def lcdmenu_state(_):
         properties = probe_system_service(SERVICE)
