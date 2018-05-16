@@ -13,9 +13,14 @@ DESCRIPTION = 'description'
 PREV = 'prev'
 NEXT = 'next'
 ACTION = 'action'
+REFRESH_RATE = 'refresh'
+# A set of useful refresh rates, expressed as redraws per second.
+REFRESH_SLOW = 0.2
+REFRESH_MEDIUM = 1.0
+REFRESH_FAST = 4.0
+
 JIFFY = 0.01  # A very short period of time
 BACKLIGHT_DELAY = 30.0
-REDRAW_DELAY = 0.25
 
 # Constants for configuring/installing/managing services
 SERVICE = "lcdmenu"
@@ -178,7 +183,7 @@ class LCDBuffer(object):
         :param line: The line number
         :type line: int
         :param text: The text for the line can be longer than the display
-        :type text: string
+        :type text: basestring
         """
         self._buffer[line] = text
 
@@ -435,7 +440,8 @@ class MenuState(object):
         self.lcd.set_line(0, self._format(title, pre, post))
         self.lcd.set_line(1, self._format(description, just=1))
         self.lcd.flush()
-        self._set_update_time(menu_item, REDRAW_DELAY)
+        delay = 1.0 / menu_item[REFRESH_RATE]
+        self._set_update_time(menu_item, delay)
 
     def _format(self, message, pre="", post="", just=-1):
         """
@@ -491,9 +497,9 @@ class MenuState(object):
     def do_next(self):
         """This method is called when the 'next' button is pressed"""
         menu_item = self.peek()
-        nxt = menu_item[NEXT]
-        if nxt:
-            self.swap(nxt)
+        next = menu_item[NEXT]
+        if next:
+            self.swap(next)
 
     def quit(self):
         """A handler that is called when the program quits."""
@@ -588,14 +594,19 @@ def probe_system_service(name):
 
 ###########################################################################
 # Methods for creating and managing menu item structures
-def create_menu_item(title, description, action=None):
+def create_menu_item(title, description, action=None, refresh_rate=REFRESH_SLOW):
     """Create a menu item data structure, returning it. Both title and
     description may be strings (or things that can be turned into strings),
     or a function that returns a string
-    :param title: The title of the menu item
-    :param description: The description of the menu item
+    :param title: The title of the menu item, a function taking MenuState as
+    argument
+    :param description: The description of the menu item, a function taking
+    MenuState as argument
     :param action: A function with a single argument of the MenuState, which
-    may perform arbitrary work"""
+    may perform arbitrary work
+    :param refresh_rate: The rate at which this menu item is re-evaluated and
+    redrawn on the LCD display, expressed as a number of times per second
+    :type refresh_rate: float"""
 
     title_resolved = title if callable(title) else lambda _: str(title)
     description_resolved = description if callable(description) \
@@ -604,6 +615,7 @@ def create_menu_item(title, description, action=None):
     return {ID: uuid4(),
             TITLE: title_resolved,
             DESCRIPTION: description_resolved,
+            REFRESH_RATE: refresh_rate,
             ACTION: action,
             PREV: None,
             NEXT: None}
@@ -721,8 +733,10 @@ def add_menu_items(menu_state):
         create_menu_item("Information", get_hostname),
         create_menu_item("IP Address", get_ip_address),
         create_menu_item("Uptime", uptime),
-        create_menu_item("Load average", load_average),
-        create_menu_item("Date/Time", time)
+        create_menu_item("Load average", load_average,
+                         refresh_rate=REFRESH_MEDIUM),
+        create_menu_item("Date/Time", time,
+                         refresh_rate=REFRESH_FAST)
     )
 
     sys = create_submenu(
