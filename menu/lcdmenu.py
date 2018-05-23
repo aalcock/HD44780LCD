@@ -623,6 +623,12 @@ def create_menu_item(title, description, action=None,
 
 
 def create_service_menu(service_name):
+    """Creates a menu for the specified service
+    :param service_name: The full name of the systemctl service, with or
+    without the .service suffic
+    :type service_name: basestring
+    :return: A menu item datastructure"""
+
     def get_service_state(_):
         properties = probe_system_service(service_name)
         try:
@@ -633,15 +639,12 @@ def create_service_menu(service_name):
     return create_menu_item(service_name, get_service_state)
 
 
-def create_submenu(parent, *menu_items):
-    """Link menu items together, optionally under a parent menu item.
-    :param parent: A menu item that, when invoked, opens a sub menu
-    :type parent: dict (a menu item)
-    :param menu_items: An unbounded number of menu item data structures
-    that comprise the create_submenu
-    :type menu_items: dict
-    :return: the parent menu item (if present), else the first item in the
-    sub-menu"""
+def link_menus(*menu_items):
+    """
+    Links a list of menu items into a loop of menu items
+    :param menu_items:
+    :return: the first menu item
+    """
     def link(a, b):
         a[NEXT] = b
         b[PREV] = a
@@ -651,11 +654,20 @@ def create_submenu(parent, *menu_items):
         link(prev, menu_item)
         prev = menu_item
 
-    if parent:
-        parent[ACTION] = lambda state: state.push(menu_items[0])
-        return parent
-    else:
-        return menu_items[0]
+    return menu_items[0]
+
+
+def create_submenu(parent, *menu_items):
+    """Make a menu item open a submenu consisting of the nominated menu items
+    :param parent: A menu item that, when invoked, opens a sub menu
+    :type parent: dict (a menu item)
+    :param menu_items: An unbounded number of menu item data structures
+    that comprise the create_submenu
+    :type menu_items: dict
+    :return: the parent menu item"""
+    link_menus(*menu_items)
+    parent[ACTION] = lambda state: state.push(menu_items[0])
+    return parent
 
 
 def add_menu_items(menu_state):
@@ -759,8 +771,8 @@ def add_menu_items(menu_state):
         create_menu_item("Shutdown", "Are you sure?", action=shutdown)
     )
 
-    root = create_submenu(None, dt, sys, reboot)
-    menu_state.push(root)
+    link_menus(dt, sys, reboot)
+    menu_state.push(dt)
 
 
 def install():
