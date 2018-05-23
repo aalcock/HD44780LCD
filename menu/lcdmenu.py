@@ -621,6 +621,17 @@ def create_menu_item(title, description, action=None, refresh_rate=REFRESH_SLOW)
             NEXT: None}
 
 
+def create_service_menu(service_name):
+    def get_service_state(_):
+        properties = probe_system_service(service_name)
+        try:
+            return properties[ACTIVE_STATE] + ", " + properties[SUB_STATE]
+        except KeyError:
+            return "Unknown state"
+
+    return create_menu_item(service_name, get_service_state)
+
+
 def create_submenu(parent, *menu_items):
     """Link menu items together, optionally under a parent menu item.
     :param parent: A menu item that, when invoked, opens a sub menu
@@ -702,12 +713,6 @@ def add_menu_items(menu_state):
         menu_item.quit()
         menu_item.lcd.flash("Rebooting...")
 
-    def lcdmenu_state(_):
-        properties = probe_system_service(SERVICE)
-        try:
-            return properties[ACTIVE_STATE] + ", " + properties[SUB_STATE]
-        except KeyError:
-            return "Unknown state"
 
     def get_ip_address(_):
         # This method assumes a simple network:
@@ -742,7 +747,9 @@ def add_menu_items(menu_state):
 
     sys = create_submenu(
         create_menu_item("Services", "start, stop, ..."),
-        create_menu_item("lcdmenu", lcdmenu_state)
+        create_service_menu("home-assistant@homeassistant"),
+        create_service_menu("nodered"),
+        create_service_menu(SERVICE)
     )
 
     reboot = create_submenu(
