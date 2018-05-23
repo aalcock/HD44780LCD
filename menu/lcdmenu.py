@@ -192,17 +192,17 @@ class LCDBuffer(object):
         if a == b:
             return None
 
-        l = len(a)
+        length = len(a)
 
         # Normalise b
         if not b:
             b = ""
-        if len(b) < l:
-            b = b.ljust(len(b) - l + 1)
+        if len(b) < length:
+            b = b.ljust(len(b) - length + 1)
 
         diffs = []
         last_diff = None
-        for i in range(l):
+        for i in range(length):
             if a[i] == b[i]:
                 if last_diff is not None:
                     diffs.append((last_diff, i + 1))
