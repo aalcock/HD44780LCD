@@ -497,9 +497,9 @@ class MenuState(object):
     def do_next(self):
         """This method is called when the 'next' button is pressed"""
         menu_item = self.peek()
-        next = menu_item[NEXT]
+        nxt = menu_item[NEXT]
         if next:
-            self.swap(next)
+            self.swap(nxt)
 
     def quit(self):
         """A handler that is called when the program quits."""
@@ -594,7 +594,8 @@ def probe_system_service(name):
 
 ###########################################################################
 # Methods for creating and managing menu item structures
-def create_menu_item(title, description, action=None, refresh_rate=REFRESH_SLOW):
+def create_menu_item(title, description, action=None,
+                     refresh_rate=REFRESH_SLOW):
     """Create a menu item data structure, returning it. Both title and
     description may be strings (or things that can be turned into strings),
     or a function that returns a string
