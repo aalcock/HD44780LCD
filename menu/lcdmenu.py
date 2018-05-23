@@ -726,6 +726,7 @@ def add_menu_items(menu_state):
             s.close()
         return ip
 
+
     def get_hostname(_):
         return node().split(".")[0]
 
