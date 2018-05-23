@@ -213,7 +213,7 @@ class LCDBuffer(object):
                 last_diff = i
         else:
             if last_diff is not None:
-                diffs.append((last_diff, l))
+                diffs.append((last_diff, length))
 
         # Now condense differences that are close together
         condensed = []
